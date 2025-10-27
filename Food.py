@@ -330,14 +330,6 @@ app.layout = html.Div(
                     ],
                     style={"flex": 2, "minWidth": 250, "marginRight": 12},
                 ),
-                html.Div(
-                    [
-                        html.Label("Rebuild index"),
-                        html.Button("Fetch next 14 days", id="rebuild-btn"),
-                        dcc.Loading(html.Div(id="rebuild-status", style={"marginTop": 6})),
-                    ],
-                    style={"flex": 1, "minWidth": 220},
-                ),
             ],
             style={"display": "flex", "flexWrap": "wrap", "alignItems": "flex-end", "gap": 8},
         ),
