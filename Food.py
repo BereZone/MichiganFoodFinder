@@ -276,6 +276,9 @@ print(
 app = dash.Dash(__name__)
 app.title = "UMich Food Finder"
 
+server = app.server
+
+
 # Precompute dropdown options
 unique_items = (
     MENU_DF[["item_key", "item_display"]]
@@ -458,4 +461,7 @@ def rebuild_index(n_clicks):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import os
+    port = int(os.environ.get("PORT", 8050))
+    # 0.0.0.0 is required on most hosts
+    app.run(host="0.0.0.0", port=port, debug=False)
