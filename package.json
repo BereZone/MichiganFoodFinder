@@ -1,0 +1,14 @@
+{
+    "name": "michigan-food-finder",
+    "version": "1.0.0",
+    "scripts": {
+        "build": "cd client && npm install && npm run build",
+        "dev": "node local-server.js"
+    },
+    "dependencies": {
+        "axios": "^1.7.9",
+        "cheerio": "^1.0.0",
+        "cors": "^2.8.5",
+        "express": "^4.21.2"
+    }
+}
