@@ -121,7 +121,7 @@ const MenuFinder: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center min-h-screen bg-gray-50">
+            <div className="flex justify-center items-center min-h-screen">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
         );
@@ -129,14 +129,14 @@ const MenuFinder: React.FC = () => {
 
     if (error) {
         return (
-            <div className="flex justify-center items-center min-h-screen bg-gray-50 text-red-600">
+            <div className="flex justify-center items-center min-h-screen text-red-600">
                 {error}
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4 sm:p-8 font-sans text-gray-900">
+        <div className="min-h-screen p-4 sm:p-8 font-sans text-gray-900">
             <div className="max-w-7xl mx-auto">
                 <header className="mb-8 text-center">
                     <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mb-2">
