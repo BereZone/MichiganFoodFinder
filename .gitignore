@@ -5,8 +5,10 @@ dist/
 coverage/
 .vscode/
 
-# Python/Old files
-*.py
-*.txt
-Procfile
+# Python
 __pycache__/
+*.pyc
+
+# Old server files
+Procfile
+menu_items_with_counts.txt

@@ -22,54 +22,36 @@ const MenuFinder: React.FC = () => {
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(1);
     const [error, setError] = useState<string | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<string>('');
 
     useEffect(() => {
-        const fetchAllDays = async () => {
+        const fetchMenus = async () => {
             setLoading(true);
             setError(null);
-            const today = new Date();
-            const promises = [];
-
-            // Create 14 requests for the next 14 days
-            for (let i = 0; i < 14; i++) {
-                const date = new Date(today);
-                date.setDate(today.getDate() + i);
-                const dateStr = date.toISOString().split('T')[0];
-
-                // Fetch each day individually to avoid Vercel timeouts
-                promises.push(
-                    fetch(`/api/menus?date=${dateStr}`)
-                        .then(res => {
-                            if (!res.ok) throw new Error(`Failed to fetch ${dateStr}`);
-                            return res.json();
-                        })
-                        .then(data => {
-                            // Progressively update state as days arrive
-                            setItems(prev => {
-                                // Avoid duplicates if multiple requests return same items (unlikely but safe)
-                                const newItems = [...prev, ...data];
-                                // Sort by date then item name
-                                return newItems.sort((a, b) =>
-                                    a.date.localeCompare(b.date) || a.item_display.localeCompare(b.item_display)
-                                );
-                            });
-                        })
-                        .catch(err => console.error(`Error fetching ${dateStr}:`, err))
-                );
-            }
 
             try {
-                // Wait for all to finish (or fail silently for individual days)
-                await Promise.all(promises);
+                const response = await fetch('/menus.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load menu data');
+                }
+                const data = await response.json();
+
+                // Sort menus by date then item name
+                const sortedMenus = data.menus.sort((a: MenuItem, b: MenuItem) =>
+                    a.date.localeCompare(b.date) || a.item_display.localeCompare(b.item_display)
+                );
+
+                setItems(sortedMenus);
+                setLastUpdated(data.last_updated);
             } catch (err) {
-                console.error("Error in parallel fetch:", err);
-                setError("Some menu data failed to load. Please try refreshing.");
+                console.error("Error loading menus:", err);
+                setError("Failed to load menu data. Please try refreshing.");
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchAllDays();
+        fetchMenus();
     }, []);
 
     // Reset page when filters change
@@ -161,6 +143,11 @@ const MenuFinder: React.FC = () => {
                     <p className="text-gray-600">
                         Explore menus across campus for the next 14 days.
                     </p>
+                    {lastUpdated && (
+                        <p className="text-xs text-gray-500 mt-2">
+                            Last updated: {new Date(lastUpdated).toLocaleString()}
+                        </p>
+                    )}
                 </header>
 
                 <div className="bg-white rounded-xl shadow-lg p-6 mb-8 transition-all duration-300 hover:shadow-xl">
