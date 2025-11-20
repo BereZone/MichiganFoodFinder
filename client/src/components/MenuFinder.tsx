@@ -27,6 +27,18 @@ const MenuFinder: React.FC = () => {
     const [selectedMeal, setSelectedMeal] = useState<string>('');
     const [showFavorites, setShowFavorites] = useState(false);
 
+    // Theme State
+    const [darkMode, setDarkMode] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('umich-dining-theme');
+            if (saved) {
+                return saved === 'dark';
+            }
+            return window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+        return false;
+    });
+
     // Data States
     const [favorites, setFavorites] = useState<string[]>(() => {
         const saved = localStorage.getItem('umich-dining-favorites');
@@ -36,6 +48,18 @@ const MenuFinder: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<string>('');
     const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+
+    // Apply Dark Mode
+    useEffect(() => {
+        const root = document.documentElement;
+        if (darkMode) {
+            root.classList.add('dark');
+            localStorage.setItem('umich-dining-theme', 'dark');
+        } else {
+            root.classList.remove('dark');
+            localStorage.setItem('umich-dining-theme', 'light');
+        }
+    }, [darkMode]);
 
     // Load initial data
     useEffect(() => {
@@ -191,40 +215,25 @@ const MenuFinder: React.FC = () => {
 
         let meal = '';
 
-        // Logic:
-        // Breakfast: < 10:30 AM
-        // Dinner: >= 4:30 PM (16.5)
-        // Lunch (Weekday): 10:30 AM - 4:30 PM
-        // Lunch (Weekend): 10:30 AM - 2:00 PM (14.0)
-
         if (time < 10.5) {
             meal = 'Breakfast';
         } else if (time >= 16.5) {
             meal = 'Dinner';
         } else {
-            // It's between 10:30 AM and 4:30 PM
             if (isWeekend) {
-                // On weekends, Lunch ends at 2 PM
                 if (time < 14.0) {
                     meal = 'Lunch';
-                    // Note: Some halls might serve Brunch, but we'll stick to Lunch as requested.
-                    // If we wanted to be smarter, we could check if 'Brunch' exists in the data.
                 } else {
-                    // Gap between 2 PM and 4:30 PM on weekends
-                    // Default to upcoming Dinner
                     meal = 'Dinner';
                 }
             } else {
-                // Weekdays: Lunch runs until Dinner starts
                 meal = 'Lunch';
             }
         }
 
-        // Check if date exists in our data (might be out of range)
         if (uniqueDates.includes(dateStr)) {
             setSelectedDate(dateStr);
         } else {
-            // If today isn't in range (e.g. late night scrape), default to first available
             setSelectedDate(uniqueDates[0] || '');
         }
 
@@ -235,9 +244,35 @@ const MenuFinder: React.FC = () => {
         setShowFavorites(false);
     };
 
+    const addToCalendar = (item: MenuItem) => {
+        const startTimeMap: Record<string, string> = {
+            "Breakfast": "080000",
+            "Brunch": "100000",
+            "Lunch": "110000",
+            "Dinner": "170000"
+        };
+        const endTimeMap: Record<string, string> = {
+            "Breakfast": "100000",
+            "Brunch": "140000",
+            "Lunch": "140000",
+            "Dinner": "200000"
+        };
+
+        const sTime = startTimeMap[item.meal] || "120000";
+        const eTime = endTimeMap[item.meal] || "130000";
+        const dateStr = item.date.replace(/-/g, '');
+
+        const details = `Served at ${item.hall} for ${item.meal}.`;
+        const location = item.hall;
+
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(item.item_display)}&dates=${dateStr}T${sTime}/${dateStr}T${eTime}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(location)}`;
+
+        window.open(url, '_blank');
+    };
+
     if (loading) {
         return (
-            <div className="flex justify-center items-center min-h-screen">
+            <div className="flex justify-center items-center min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
         );
@@ -245,30 +280,39 @@ const MenuFinder: React.FC = () => {
 
     if (error) {
         return (
-            <div className="flex justify-center items-center min-h-screen text-red-600">
+            <div className="flex justify-center items-center min-h-screen bg-gray-50 dark:bg-gray-900 text-red-600 transition-colors duration-200">
                 {error}
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen p-4 sm:p-8 font-sans text-gray-900">
+        <div className="min-h-screen p-4 sm:p-8 font-sans text-gray-900 bg-gray-50 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200">
             <div className="max-w-7xl mx-auto">
-                <header className="mb-8 text-center">
-                    <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mb-2">
+                <header className="mb-8 text-center relative">
+                    <button
+                        onClick={() => setDarkMode(!darkMode)}
+                        className="absolute top-0 right-0 p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-yellow-300 transition-colors hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2 px-4"
+                        title="Toggle Dark Mode"
+                    >
+                        <span>{darkMode ? '🌙' : '☀️'}</span>
+                        <span className="text-xs font-medium">{darkMode ? 'Dark' : 'Light'}</span>
+                    </button>
+
+                    <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 mb-2">
                         UMich Dining Menu Finder
                     </h1>
-                    <p className="text-gray-600 mb-2">
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">
                         Explore menus across campus{dateRange && ` from ${dateRange.start} to ${dateRange.end}`}.
                     </p>
                     {lastUpdated && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
                             Last updated: {new Date(lastUpdated).toLocaleString()}
                         </p>
                     )}
                     <div className="mt-4 mx-auto max-w-2xl flex flex-col gap-2 items-center">
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-gray-700 w-full">
-                            <p className="font-medium text-yellow-800 mb-1">⚠️ Disclaimer</p>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 text-sm text-gray-700 dark:text-gray-300 w-full">
+                            <p className="font-medium text-yellow-800 dark:text-yellow-500 mb-1">⚠️ Disclaimer</p>
                             <p className="text-xs">
                                 This data is not 100% accurate. For the most up-to-date menu information,
                                 please check the official dining hall menus on the day you plan to visit.
@@ -283,17 +327,17 @@ const MenuFinder: React.FC = () => {
                     </div>
                 </header>
 
-                <div className="bg-white rounded-xl shadow-lg p-6 mb-8 transition-all duration-300 hover:shadow-xl">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8 transition-all duration-300 hover:shadow-xl">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {/* Search */}
                         <div className="col-span-1 md:col-span-2 lg:col-span-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Search Item
                             </label>
                             <div className="relative">
                                 <input
                                     type="text"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white dark:bg-gray-700 dark:text-white"
                                     placeholder="e.g., Chicken..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -309,11 +353,11 @@ const MenuFinder: React.FC = () => {
 
                         {/* Date Filter */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Date
                             </label>
                             <select
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
                                 value={selectedDate}
                                 onChange={(e) => setSelectedDate(e.target.value)}
                             >
@@ -326,11 +370,11 @@ const MenuFinder: React.FC = () => {
 
                         {/* Meal Filter */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Meal
                             </label>
                             <select
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
                                 value={selectedMeal}
                                 onChange={(e) => setSelectedMeal(e.target.value)}
                             >
@@ -346,8 +390,8 @@ const MenuFinder: React.FC = () => {
                             <button
                                 onClick={() => setShowFavorites(!showFavorites)}
                                 className={`w-full px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center gap-2 border ${showFavorites
-                                    ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                                    ? 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900 dark:text-yellow-300 dark:border-yellow-600'
+                                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600'
                                     }`}
                             >
                                 <span>{showFavorites ? '★' : '☆'}</span>
@@ -357,7 +401,7 @@ const MenuFinder: React.FC = () => {
 
                         {/* Hall Filter */}
                         <div className="col-span-1 md:col-span-2 lg:col-span-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Dining Halls
                             </label>
                             <div className="flex flex-wrap gap-2">
@@ -367,7 +411,7 @@ const MenuFinder: React.FC = () => {
                                         onClick={() => toggleHall(hall)}
                                         className={`px-3 py-1 rounded-full text-sm font-medium transition-colors duration-200 ${selectedHalls.includes(hall)
                                             ? 'bg-blue-600 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                                             }`}
                                     >
                                         {hall}
@@ -377,8 +421,8 @@ const MenuFinder: React.FC = () => {
                         </div>
 
                         {/* Tag Filter */}
-                        <div className="col-span-1 md:col-span-2 lg:col-span-4 border-t pt-4 mt-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <div className="col-span-1 md:col-span-2 lg:col-span-4 border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Filter by Tags
                             </label>
                             <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
@@ -387,8 +431,8 @@ const MenuFinder: React.FC = () => {
                                         key={tag}
                                         onClick={() => toggleTag(tag)}
                                         className={`px-2 py-1 rounded text-xs font-medium transition-colors duration-200 border ${selectedTags.includes(tag)
-                                            ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                            ? 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900 dark:text-indigo-200 dark:border-indigo-700'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600'
                                             }`}
                                     >
                                         {tag}
@@ -399,69 +443,97 @@ const MenuFinder: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">Fav</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Meal</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hall</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tags</th>
+                                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-12">Fav</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Item</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Meal</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hall</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tags</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nutrition</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cal</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 {paginatedItems.map((item, idx) => {
                                     const isFav = favorites.includes(item.item_key);
                                     return (
-                                        <tr key={`${item.item_key}-${item.date}-${item.meal}-${item.hall}-${idx}`} className={`hover:bg-gray-50 transition-colors ${isFav ? 'bg-yellow-50' : ''}`}>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                        <tr key={`${item.item_key}-${item.date}-${item.meal}-${item.hall}-${idx}`} className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isFav ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}`}>
+                                            <td className="px-2 py-4 whitespace-nowrap text-center">
                                                 <button
                                                     onClick={() => toggleFavorite(item.item_key)}
-                                                    className={`text-xl focus:outline-none transition-transform hover:scale-110 ${isFav ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`}
+                                                    className={`text-xl focus:outline-none transition-transform hover:scale-110 ${isFav ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'}`}
                                                     title={isFav ? "Remove from favorites" : "Add to favorites"}
                                                 >
                                                     {isFav ? '★' : '☆'}
                                                 </button>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{item.item_display}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500">{item.date}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.meal === 'Breakfast' ? 'bg-yellow-100 text-yellow-800' :
-                                                    item.meal === 'Lunch' ? 'bg-green-100 text-green-800' :
-                                                        'bg-indigo-100 text-indigo-800'
+                                            <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">{item.item_display}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.date}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.meal === 'Breakfast' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                    item.meal === 'Lunch' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                                        'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
                                                     }`}>
                                                     {item.meal}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500">{item.hall}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-500">
+                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.hall}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                                                 <div className="flex flex-wrap gap-1">
                                                     {item.nutrient_density && (
-                                                        <span className="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800" title="Nutrient Density">
+                                                        <span className="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" title="Nutrient Density">
                                                             ND: {item.nutrient_density}
                                                         </span>
                                                     )}
                                                     {item.carbon_footprint && (
-                                                        <span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800" title="Carbon Footprint">
+                                                        <span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" title="Carbon Footprint">
                                                             CF: {item.carbon_footprint}
                                                         </span>
                                                     )}
                                                     {item.other_tags.map(tag => (
-                                                        <span key={tag} className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 border border-gray-200">
+                                                        <span key={tag} className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
                                                             {tag}
                                                         </span>
                                                     ))}
                                                 </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {item.nutrition && item.nutrition.calories !== null ? (
+                                                    <div className="group relative cursor-help">
+                                                        <span className="font-medium text-gray-900 dark:text-gray-200">{item.nutrition.calories} kcal</span>
+                                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-48 bg-black text-white text-xs rounded p-2 z-10 shadow-lg">
+                                                            <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                                                                <span>Fat:</span> <span className="text-right">{item.nutrition.total_fat || '-'}</span>
+                                                                <span>Carbs:</span> <span className="text-right">{item.nutrition.total_carbohydrate || '-'}</span>
+                                                                <span>Protein:</span> <span className="text-right">{item.nutrition.protein || '-'}</span>
+                                                                <span>Sodium:</span> <span className="text-right">{item.nutrition.sodium || '-'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400">-</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                                <button
+                                                    onClick={() => addToCalendar(item)}
+                                                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                                    title="Add to Google Calendar"
+                                                >
+                                                    📅
+                                                </button>
                                             </td>
                                         </tr>
                                     );
                                 })}
                                 {paginatedItems.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={8} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                             {showFavorites && favorites.length === 0
                                                 ? "You haven't added any favorites yet. Click the star icon next to an item to add it!"
                                                 : "No items found matching your criteria."}
@@ -473,22 +545,22 @@ const MenuFinder: React.FC = () => {
                     </div>
 
                     {/* Pagination Controls */}
-                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-                        <div className="text-sm text-gray-500">
+                    <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex items-center justify-between">
+                        <div className="text-sm text-gray-500 dark:text-gray-300">
                             Showing {filteredItems.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} of {filteredItems.length} results
                         </div>
                         <div className="flex gap-2">
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="px-3 py-1 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 &larr; Previous
                             </button>
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages || totalPages === 0}
-                                className="px-3 py-1 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Next &rarr;
                             </button>

@@ -8,6 +8,13 @@ export interface MenuItem {
     carbon_footprint: string;
     other_tags: string[];
     other_tags_str: string;
+    nutrition: {
+        calories: number | null;
+        total_fat: string | null;
+        total_carbohydrate: string | null;
+        protein: string | null;
+        sodium: string | null;
+    };
     item_display: string;
 }
 

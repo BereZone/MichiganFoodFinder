@@ -125,6 +125,57 @@ def parse_tags_from_li_text(li_text: str) -> tuple:
 
     return nd, cf, others, others_str
 
+def parse_nutrition_from_li(li) -> dict:
+    """
+    Extract detailed nutrition facts from the LI element's HTML structure.
+    Returns a dict with calories, protein, sugar, carbohydrate, total_fat, sodium.
+    """
+    nut = {
+        "calories": None,
+        "total_fat": None,
+        "total_carbohydrate": None,
+        "protein": None,
+        "sodium": None
+    }
+    
+    if not li:
+        return nut
+
+    # Calories: Look for <tr class="portion-calories"> -> <td>Calories 164</td>
+    cal_tr = li.find("tr", class_="portion-calories")
+    if cal_tr:
+        txt = normalize_spaces(cal_tr.get_text())
+        # "Calories 164"
+        m = re.search(r"Calories\s+(\d+)", txt, re.I)
+        if m:
+            nut["calories"] = int(m.group(1))
+
+    # For others, we iterate rows or look for specific text
+    # The structure is usually <tr><td><strong>Label</strong> Value</td>...</tr>
+    # We can search for the label in the text of the rows
+    
+    # Helper to find value for a label
+    def find_val(label_pattern):
+        # Find a td that contains this pattern
+        # The HTML is like: <td><strong>Total Fat</strong> 3g</td>
+        # So we search all tds
+        for td in li.find_all("td"):
+            txt = normalize_spaces(td.get_text())
+            if re.search(label_pattern, txt, re.I):
+                # Extract the value. Usually it's "Label Value" or "LabelValue"
+                # Regex: Label\s*(\d+(?:g|mg))
+                m_val = re.search(rf"{label_pattern}\s*(\d+(?:\.\d+)?(?:g|mg))", txt, re.I)
+                if m_val:
+                    return m_val.group(1)
+        return None
+
+    nut["total_fat"] = find_val(r"Total\s*Fat")
+    nut["total_carbohydrate"] = find_val(r"Total\s*Carbohydrate")
+    nut["protein"] = find_val(r"Protein")
+    nut["sodium"] = find_val(r"Sodium")
+    
+    return nut
+
 async def fetch_text(session: aiohttp.ClientSession, url: str) -> str:
     try:
         async with session.get(url, headers=HEADERS, ssl=SSL_CONTEXT, timeout=aiohttp.ClientTimeout(total=15)) as resp:
@@ -172,6 +223,9 @@ async def parse_menu_for_day_hall(session, hall_name: str, base_url: str, date: 
             li = it.find_parent("li")
             li_text = normalize_spaces(li.get_text(" ", strip=True)) if li else display
             nutrient_density, carbon_footprint, other_tags, other_tags_str = parse_tags_from_li_text(li_text)
+            
+            # Parse detailed nutrition
+            nutrition = parse_nutrition_from_li(li)
 
             k = item_key(display)
             if k in seen_for_section:
@@ -188,6 +242,7 @@ async def parse_menu_for_day_hall(session, hall_name: str, base_url: str, date: 
                 "carbon_footprint": carbon_footprint,
                 "other_tags": other_tags,
                 "other_tags_str": other_tags_str,
+                "nutrition": nutrition
             })
     return results
 
