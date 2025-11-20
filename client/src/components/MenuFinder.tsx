@@ -23,6 +23,7 @@ const MenuFinder: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<string>('');
+    const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
 
     useEffect(() => {
         const fetchMenus = async () => {
@@ -43,6 +44,7 @@ const MenuFinder: React.FC = () => {
 
                 setItems(sortedMenus);
                 setLastUpdated(data.last_updated);
+                setDateRange(data.date_range);
             } catch (err) {
                 console.error("Error loading menus:", err);
                 setError("Failed to load menu data. Please try refreshing.");
@@ -140,14 +142,24 @@ const MenuFinder: React.FC = () => {
                     <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mb-2">
                         UMich Dining Menu Finder
                     </h1>
-                    <p className="text-gray-600">
-                        Explore menus across campus for the next 14 days.
+                    <p className="text-gray-600 mb-2">
+                        Explore menus across campus{dateRange && ` from ${dateRange.start} to ${dateRange.end}`}.
                     </p>
                     {lastUpdated && (
-                        <p className="text-xs text-gray-500 mt-2">
+                        <p className="text-xs text-gray-500">
                             Last updated: {new Date(lastUpdated).toLocaleString()}
                         </p>
                     )}
+                    <div className="mt-4 mx-auto max-w-2xl">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-gray-700">
+                            <p className="font-medium text-yellow-800 mb-1">⚠️ Disclaimer</p>
+                            <p className="text-xs">
+                                This data is not 100% accurate. For the most up-to-date menu information,
+                                please check the official dining hall menus on the day you plan to visit.
+                                This tool is intended to help you find when certain foods may be served.
+                            </p>
+                        </div>
+                    </div>
                 </header>
 
                 <div className="bg-white rounded-xl shadow-lg p-6 mb-8 transition-all duration-300 hover:shadow-xl">
