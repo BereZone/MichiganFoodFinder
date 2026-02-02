@@ -11,8 +11,7 @@ except ImportError:
 # In-memory cache
 menu_cache = []
 last_fetch = None
-CACHE_DURATION = timedelta(hours=6) # Increased cache duration as per request
-scrape_lock = asyncio.Lock()
+CACHE_DURATION = timedelta(days=1) # Updated to 1 day for Hobby plan
 
 async def refresh_cache():
     global menu_cache, last_fetch
@@ -30,8 +29,8 @@ async def refresh_cache():
 
 async def schedule_refresh():
     while True:
-        # Refresh every 6 hours
-        await asyncio.sleep(6 * 3600)
+        # Refresh every 24 hours
+        await asyncio.sleep(24 * 3600)
         await refresh_cache()
 
 @asynccontextmanager
