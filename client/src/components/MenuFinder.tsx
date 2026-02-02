@@ -68,20 +68,41 @@ const MenuFinder: React.FC = () => {
             setError(null);
 
             try {
-                const response = await fetch('/menus.json');
+                // Fetch from the new dynamic API endpoint
+                const response = await fetch('/api/menus');
                 if (!response.ok) {
                     throw new Error('Failed to load menu data');
                 }
                 const data = await response.json();
 
-                // Sort menus by date then item name
-                const sortedMenus = data.menus.sort((a: MenuItem, b: MenuItem) =>
-                    a.date.localeCompare(b.date) || a.item_display.localeCompare(b.item_display)
-                );
+                // The API now returns a flat list of items directly, or we might need to adapt if the structure matches exactly.
+                // Our API returns a list of items directly.
+                let menuItems: MenuItem[] = [];
+                if (Array.isArray(data)) {
+                    menuItems = data;
+                } else if (data.menus) {
+                    // Fallback if it matches old structure
+                    menuItems = data.menus;
+                }
+
+                // Sort menus by date, then meal, then hall, then station, then item name
+                const sortedMenus = menuItems.sort((a: MenuItem, b: MenuItem) => {
+                    if (a.date !== b.date) return a.date.localeCompare(b.date);
+                    if (a.meal !== b.meal) return MEALS.indexOf(a.meal) - MEALS.indexOf(b.meal);
+                    if (a.hall !== b.hall) return a.hall.localeCompare(b.hall);
+                    if (a.station && b.station && a.station !== b.station) return a.station.localeCompare(b.station);
+                    return a.item_display.localeCompare(b.item_display);
+                });
 
                 setItems(sortedMenus);
-                setLastUpdated(data.last_updated);
-                setDateRange(data.date_range);
+                // We'll trust the API is fresh. If we want metadata, we'd need to update the API to return it.
+                // For now, let's set last updated to "Now" effectively, or just don't set it if the field is missing.
+                setLastUpdated(new Date().toISOString());
+                // Calculate date range from data
+                if (sortedMenus.length > 0) {
+                    const dates = sortedMenus.map(i => i.date).sort();
+                    setDateRange({ start: dates[0], end: dates[dates.length - 1] });
+                }
             } catch (err) {
                 console.error("Error loading menus:", err);
                 setError("Failed to load menu data. Please try refreshing.");
@@ -461,74 +482,85 @@ const MenuFinder: React.FC = () => {
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 {paginatedItems.map((item, idx) => {
                                     const isFav = favorites.includes(item.item_key);
+                                    const showStationHeader = idx === 0 || item.station !== paginatedItems[idx - 1].station;
+
                                     return (
-                                        <tr key={`${item.item_key}-${item.date}-${item.meal}-${item.hall}-${idx}`} className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isFav ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}`}>
-                                            <td className="px-2 py-4 whitespace-nowrap text-center">
-                                                <button
-                                                    onClick={() => toggleFavorite(item.item_key)}
-                                                    className={`text-xl focus:outline-none transition-transform hover:scale-110 ${isFav ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'}`}
-                                                    title={isFav ? "Remove from favorites" : "Add to favorites"}
-                                                >
-                                                    {isFav ? '★' : '☆'}
-                                                </button>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">{item.item_display}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.date}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.meal === 'Breakfast' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                                    item.meal === 'Lunch' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                                        'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
-                                                    }`}>
-                                                    {item.meal}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.hall}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                                                <div className="flex flex-wrap gap-1">
-                                                    {item.nutrient_density && (
-                                                        <span className="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" title="Nutrient Density">
-                                                            ND: {item.nutrient_density}
-                                                        </span>
-                                                    )}
-                                                    {item.carbon_footprint && (
-                                                        <span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" title="Carbon Footprint">
-                                                            CF: {item.carbon_footprint}
-                                                        </span>
-                                                    )}
-                                                    {item.other_tags.map(tag => (
-                                                        <span key={tag} className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                {item.nutrition && item.nutrition.calories !== null ? (
-                                                    <div className="group relative cursor-help">
-                                                        <span className="font-medium text-gray-900 dark:text-gray-200">{item.nutrition.calories} kcal</span>
-                                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-48 bg-black text-white text-xs rounded p-2 z-10 shadow-lg">
-                                                            <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                                                                <span>Fat:</span> <span className="text-right">{item.nutrition.total_fat || '-'}</span>
-                                                                <span>Carbs:</span> <span className="text-right">{item.nutrition.total_carbohydrate || '-'}</span>
-                                                                <span>Protein:</span> <span className="text-right">{item.nutrition.protein || '-'}</span>
-                                                                <span>Sodium:</span> <span className="text-right">{item.nutrition.sodium || '-'}</span>
+                                        <React.Fragment key={`${item.item_key}-${item.date}-${item.meal}-${item.hall}-${idx}`}>
+                                            {showStationHeader && item.station && (
+                                                <tr className="bg-gray-100 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
+                                                    <td colSpan={8} className="px-6 py-2 text-sm font-bold text-yellow-700 dark:text-yellow-500 uppercase tracking-wider">
+                                                        {item.station}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            <tr className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isFav ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}`}>
+                                                <td className="px-2 py-4 whitespace-nowrap text-center">
+                                                    <button
+                                                        onClick={() => toggleFavorite(item.item_key)}
+                                                        className={`text-xl focus:outline-none transition-transform hover:scale-110 ${isFav ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'}`}
+                                                        title={isFav ? "Remove from favorites" : "Add to favorites"}
+                                                    >
+                                                        {isFav ? '★' : '☆'}
+                                                    </button>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">{item.item_display}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.date}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.meal === 'Breakfast' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                        item.meal === 'Lunch' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                                            'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
+                                                        }`}>
+                                                        {item.meal}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.hall}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {item.nutrient_density && (
+                                                            <span className="px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" title="Nutrient Density">
+                                                                ND: {item.nutrient_density}
+                                                            </span>
+                                                        )}
+                                                        {item.carbon_footprint && (
+                                                            <span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" title="Carbon Footprint">
+                                                                CF: {item.carbon_footprint}
+                                                            </span>
+                                                        )}
+                                                        {item.other_tags.map(tag => (
+                                                            <span key={tag} className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
+                                                                {tag}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                    {item.nutrition && item.nutrition.calories !== null ? (
+                                                        <div className="group relative cursor-help">
+                                                            <span className="font-medium text-gray-900 dark:text-gray-200">{item.nutrition.calories} kcal</span>
+                                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-48 bg-black text-white text-xs rounded p-2 z-10 shadow-lg">
+                                                                <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                                                                    <span>Fat:</span> <span className="text-right">{item.nutrition.total_fat || '-'}</span>
+                                                                    <span>Carbs:</span> <span className="text-right">{item.nutrition.total_carbohydrate || '-'}</span>
+                                                                    <span>Protein:</span> <span className="text-right">{item.nutrition.protein || '-'}</span>
+                                                                    <span>Sodium:</span> <span className="text-right">{item.nutrition.sodium || '-'}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-400">-</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
-                                                <button
-                                                    onClick={() => addToCalendar(item)}
-                                                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                    title="Add to Google Calendar"
-                                                >
-                                                    📅
-                                                </button>
-                                            </td>
-                                        </tr>
+                                                    ) : (
+                                                        <span className="text-gray-400">-</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                                    <button
+                                                        onClick={() => addToCalendar(item)}
+                                                        className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                                        title="Add to Google Calendar"
+                                                    >
+                                                        📅
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     );
                                 })}
                                 {paginatedItems.length === 0 && (
