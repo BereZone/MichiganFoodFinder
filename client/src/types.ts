@@ -16,6 +16,7 @@ export interface MenuItem {
         sodium: string | null;
     };
     item_display: string;
+    station?: string;
 }
 
 export interface MenuResponse {
