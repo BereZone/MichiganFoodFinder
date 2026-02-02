@@ -1,0 +1,43 @@
+name: Update Menus
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  scrape-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run Scraper
+        run: python scripts/generate_menus.py
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          # Check if there are changes
+          if [[ -n $(git status -s client/public/menus.json) ]]; then
+            git add client/public/menus.json
+            git commit -m "Auto-update menus.json [skip ci]"
+            git push
+          else
+            echo "No changes in menu data."
+          fi

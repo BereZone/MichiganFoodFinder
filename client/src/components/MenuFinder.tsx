@@ -68,25 +68,14 @@ const MenuFinder: React.FC = () => {
             setError(null);
 
             try {
-                // Fetch from the new dynamic API endpoint
-                const response = await fetch('/api/menus');
+                const response = await fetch('/menus.json');
                 if (!response.ok) {
                     throw new Error('Failed to load menu data');
                 }
                 const data = await response.json();
 
-                // The API now returns a flat list of items directly, or we might need to adapt if the structure matches exactly.
-                // Our API returns a list of items directly.
-                let menuItems: MenuItem[] = [];
-                if (Array.isArray(data)) {
-                    menuItems = data;
-                } else if (data.menus) {
-                    // Fallback if it matches old structure
-                    menuItems = data.menus;
-                }
-
                 // Sort menus by date, then meal, then hall, then station, then item name
-                const sortedMenus = menuItems.sort((a: MenuItem, b: MenuItem) => {
+                const sortedMenus = data.menus.sort((a: MenuItem, b: MenuItem) => {
                     if (a.date !== b.date) return a.date.localeCompare(b.date);
                     if (a.meal !== b.meal) return MEALS.indexOf(a.meal) - MEALS.indexOf(b.meal);
                     if (a.hall !== b.hall) return a.hall.localeCompare(b.hall);
@@ -95,14 +84,8 @@ const MenuFinder: React.FC = () => {
                 });
 
                 setItems(sortedMenus);
-                // We'll trust the API is fresh. If we want metadata, we'd need to update the API to return it.
-                // For now, let's set last updated to "Now" effectively, or just don't set it if the field is missing.
-                setLastUpdated(new Date().toISOString());
-                // Calculate date range from data
-                if (sortedMenus.length > 0) {
-                    const dates = sortedMenus.map(i => i.date).sort();
-                    setDateRange({ start: dates[0], end: dates[dates.length - 1] });
-                }
+                setLastUpdated(data.last_updated);
+                setDateRange(data.date_range);
             } catch (err) {
                 console.error("Error loading menus:", err);
                 setError("Failed to load menu data. Please try refreshing.");
