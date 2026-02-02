@@ -15,7 +15,7 @@ except ImportError:
 START_DATE = datetime.today()
 END_DATE = START_DATE + timedelta(days=14)
 print("Building initial index — this can take ~10–30s depending on network...")
-MENU_DF = build_index(START_DATE, END_DATE)
+MENU_DF = pd.DataFrame(build_index(START_DATE, END_DATE))
 LAST_BUILT = datetime.now()
 print(
     f"Index built: {len(MENU_DF):,} rows, {MENU_DF['item_key'].nunique():,} unique items; "
@@ -182,7 +182,7 @@ def rebuild_index(n_clicks):
     # Always rebuild for new 14-day window starting today
     start = datetime.today()
     end = start + timedelta(days=14)
-    new_df = build_index(start, end)
+    new_df = pd.DataFrame(build_index(start, end))
 
     # Options for dropdown
     unique_items = (

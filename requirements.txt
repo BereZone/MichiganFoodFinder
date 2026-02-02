@@ -1,8 +1,6 @@
-dash
 aiohttp
 beautifulsoup4
 certifi
-pandas
 gunicorn
 fastapi
 uvicorn

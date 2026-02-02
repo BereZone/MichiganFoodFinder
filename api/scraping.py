@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 import re
 import ssl
 import certifi
-import pandas as pd
 from collections import defaultdict
 
 # =========================
@@ -197,7 +196,7 @@ async def parse_menu_for_day_hall(session, hall_name: str, base_url: str, date: 
             })
     return results
 
-async def build_index_async(start: datetime, end: datetime) -> pd.DataFrame:
+async def build_index_async(start: datetime, end: datetime) -> list[dict]:
     sem = asyncio.Semaphore(MAX_CONCURRENCY)
 
     async with aiohttp.ClientSession() as session:
@@ -215,21 +214,21 @@ async def build_index_async(start: datetime, end: datetime) -> pd.DataFrame:
 
     rows = [r for chunk in chunks for r in chunk]
     if not rows:
-        return pd.DataFrame(columns=[
-            "item", "item_key", "meal", "hall", "date",
-            "nutrient_density", "carbon_footprint", "other_tags", "other_tags_str"
-        ])
+        return []
 
-    df = pd.DataFrame(rows)
     # Keep a canonical display label per item_key (first occurrence wins)
     # This ensures the dropdown has unique options even if site casing varies day-to-day
     first_display = {}
-    for _, r in df.iterrows():
-        first_display.setdefault(r["item_key"], r["item"])  # don't overwrite once set
-    df["item_display"] = df["item_key"].map(first_display)
+    for r in rows:
+        if r["item_key"] not in first_display:
+            first_display[r["item_key"]] = r["item"]
+            
+    # Map the canonical display name back to all rows
+    for r in rows:
+        r["item_display"] = first_display.get(r["item_key"], r["item"])
 
-    return df
+    return rows
 
 # Synchronous wrapper
-def build_index(start: datetime, end: datetime) -> pd.DataFrame:
+def build_index(start: datetime, end: datetime) -> list[dict]:
     return asyncio.run(build_index_async(start, end))

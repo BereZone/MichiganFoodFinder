@@ -20,8 +20,8 @@ async def refresh_cache():
         try:
             start_date = datetime.today()
             end_date = start_date + timedelta(days=14)
-            df = await scraping.build_index_async(start_date, end_date)
-            menu_cache = df.to_dict("records")
+            # build_index_async now returns a list of dicts directly
+            menu_cache = await scraping.build_index_async(start_date, end_date)
             last_fetch = datetime.now()
             print(f"[{last_fetch}] Menu refresh complete. {len(menu_cache)} items cached.")
         except Exception as e:
@@ -64,8 +64,7 @@ async def get_menus(days: int = 14, date: str = None):
     if date:
         try:
             target_date = datetime.strptime(date, "%Y-%m-%d")
-            df = await scraping.build_index_async(target_date, target_date)
-            return df.to_dict("records")
+            return await scraping.build_index_async(target_date, target_date)
         except Exception as e:
             print(f"Error scraping date {date}: {e}")
             raise HTTPException(status_code=500, detail=str(e))
