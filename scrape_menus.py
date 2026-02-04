@@ -197,53 +197,104 @@ async def parse_menu_for_day_hall(session, hall_name: str, base_url: str, date: 
     soup = BeautifulSoup(html, "html.parser")
     results = []
 
-    # Find meal headers
+    # Map normalized lower meal name -> the h3 element
     h3s = soup.find_all("h3")
     meal_header = {}
     for h in h3s:
-        a = h.find("a")
-        if a and a.text:
-            name = normalize_spaces(a.text)
+        a = h.find("a") 
+        # Sometimes the link text is inside the a, sometimes just text in h3
+        txt = a.get_text(strip=True) if a else h.get_text(strip=True)
+        if txt:
+            name = normalize_spaces(txt)
             meal_header[name.casefold()] = h
 
     for meal in meals:
         header = meal_header.get(meal.casefold())
         if not header:
             continue
-        ul = header.find_next("ul")
-        if not ul:
-            continue
-        items = ul.find_all("div", class_="item-name")
-        seen_for_section = set()
-        for it in items:
-            display = normalize_spaces(it.get_text(strip=True))
-            if not display:
+        
+        # The content for the meal is in the next sibling DIV
+        # We need to find the first sibling that is a tag (should be div)
+        content_div = None
+        for sibling in header.next_siblings:
+            if sibling.name == "div":
+                content_div = sibling
+                break
+            if sibling.name == "h3": # Optimization: reached next meal without finding div
+                break
+        
+        if not content_div:
+            # Fallback: try finding the next ul directly if no wrapper div found
+             content_div = header
+        
+        # Structure seems to be: 
+        # div.courses -> ul.courses_wrapper -> li -> h4 (Station) + ul.items -> li -> item
+        
+        # Traverse children of content_div
+        iterator = content_div.children if content_div != header else header.next_siblings
+        
+        for child in iterator:
+            if not child.name:
                 continue
+                
+            # If we find the main station wrapper UL
+            if child.name == "ul":
+                # This UL contains LIs, each LI is a station
+                station_lis = child.find_all("li", recursive=False)
+                
+                for station_li in station_lis:
+                    # Find station name
+                    h4 = station_li.find("h4")
+                    if h4:
+                        current_station = normalize_spaces(h4.get_text(strip=True))
+                    else:
+                        # Fallback if no H4 found in this LI, maybe continue previous or default
+                        # Some LIs might not be stations?
+                        pass 
+                    
+                    # Find items UL inside this station LI
+                    items_ul = station_li.find("ul", class_="items")
+                    if not items_ul:
+                         # Maybe it's not a station LI, or empty station
+                         continue
+                         
+                    items = items_ul.find_all("div", class_="item-name")
+                    seen_for_section = set()
+                    
+                    for it in items:
+                        display = normalize_spaces(it.get_text(strip=True))
+                        if not display:
+                            continue
 
-            li = it.find_parent("li")
-            li_text = normalize_spaces(li.get_text(" ", strip=True)) if li else display
-            nutrient_density, carbon_footprint, other_tags, other_tags_str = parse_tags_from_li_text(li_text)
+                        li = it.find_parent("li")
+                        li_text = normalize_spaces(li.get_text(" ", strip=True)) if li else display
+                        nutrient_density, carbon_footprint, other_tags, other_tags_str = parse_tags_from_li_text(li_text)
+                        nutrition = parse_nutrition_from_li(li)
+
+                        k = item_key(display)
+                        unique_id = f"{k}|{current_station}"
+                        if unique_id in seen_for_section:
+                            continue
+                        seen_for_section.add(unique_id)
+
+                        results.append({
+                            "item": display,
+                            "item_display": display,
+                            "item_key": k,
+                            "meal": meal,
+                            "hall": hall_name,
+                            "date": date_str,
+                            "station": current_station,
+                            "nutrient_density": nutrient_density,
+                            "carbon_footprint": carbon_footprint,
+                            "other_tags": other_tags,
+                            "other_tags_str": other_tags_str,
+                            "nutrition": nutrition
+                        })
             
-            # Parse detailed nutrition
-            nutrition = parse_nutrition_from_li(li)
-
-            k = item_key(display)
-            if k in seen_for_section:
-                continue
-            seen_for_section.add(k)
-            results.append({
-                "item": display,
-                "item_display": display,
-                "item_key": k,
-                "meal": meal,
-                "hall": hall_name,
-                "date": date_str,
-                "nutrient_density": nutrient_density,
-                "carbon_footprint": carbon_footprint,
-                "other_tags": other_tags,
-                "other_tags_str": other_tags_str,
-                "nutrition": nutrition
-            })
+            # Legacy/Fallback: If strict structure fails, maybe try to find items directly?
+            # But the recursive find_all in previous attempt found them but flattened stations.
+            # We want to strictly find stations now.
     return results
 
 async def scrape_all_menus(days: int = 14) -> list:
