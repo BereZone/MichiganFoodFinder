@@ -176,6 +176,10 @@ const parseMenuForDayHall = async (hallName, baseUrl, date) => {
             const liText = li.length ? normalizeSpaces(li.text()) : display;
             const { nd, cf, others, othersStr } = parseTagsFromLiText(liText);
 
+            // Extract Station Name
+            // Structure: Station LI -> H4 (Name) + UL.items -> Item LI -> ... -> div.item-name
+            const stationName = normalizeSpaces($(el).closest('ul.items').siblings('h4').text());
+
             const k = itemKey(display);
             if (seenForSection.has(k)) return;
             seenForSection.add(k);
@@ -183,6 +187,7 @@ const parseMenuForDayHall = async (hallName, baseUrl, date) => {
             results.push({
                 item: display,
                 item_key: k,
+                station: stationName || "Other", // Default to "Other" if no station found
                 meal: meal,
                 hall: hallName,
                 date: dateStr,
