@@ -1,9 +1,12 @@
 name: Scrape Menus
 
 on:
-  schedule:
-    # Every 6 hours
-    - cron: '0 */6 * * *'
+  # Schedule paused 2026-07-14: dining.umich.edu now serves a Cloudflare
+  # challenge to all non-browser clients, so scraping returns 0 items.
+  # Re-enable the cron below once the official Dining API access lands
+  # (see docs/setup.md and the tracking notes in the repo).
+  # schedule:
+  #   - cron: '0 */6 * * *'
   workflow_dispatch: # Allow manual trigger
 
 permissions:
