@@ -32,7 +32,10 @@ jobs:
         run: python scrape_menus.py
 
       # GitHub pauses scheduled workflows after 60 days without repo activity;
-      # this re-enables the workflow via the API so the schedule never dies.
+      # re-enabling the workflow via the API resets that timer so the schedule
+      # never dies. gh is preinstalled on runners; idempotent if already enabled.
       - name: Keep workflow alive
         if: ${{ always() }}
-        uses: gautamkrishnar/keepalive-workflow@v2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/update_menus.yml/enable"
