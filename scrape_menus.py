@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """
-Standalone script to scrape UMich dining menus for the next 14 days.
-Outputs to client/public/menus.json for static serving.
+Scrape UMich dining menus for the next 14 days and upsert them into the
+Supabase Postgres database (tables: items, offerings — see supabase/schema.sql).
 
-Run: python scrape_menus.py
+Usage:
+    SUPABASE_DB_URL=postgresql://... python scrape_menus.py   # write to database
+    python scrape_menus.py --json                             # write menus.json locally instead
+
+SUPABASE_DB_URL should be the *Session pooler* connection string from the
+Supabase dashboard (Connect → Session pooler) — the direct connection is
+IPv6-only and unreachable from GitHub Actions runners.
 """
 
+import argparse
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import re
 import ssl
+import sys
 import certifi
 import json
 import os
@@ -99,7 +107,7 @@ def normalize_cf(v: str) -> str:
 def parse_tags_from_li_text(li_text: str) -> tuple:
     """Extract Nutrient Density, Carbon Footprint, and Other Tags."""
     head = normalize_spaces(
-        re.split(r"\b(close|Contains:|Nutrition Facts|Serving Size)\b", li_text, 1, flags=re.I)[0]
+        re.split(r"\b(close|Contains:|Nutrition Facts|Serving Size)\b", li_text, maxsplit=1, flags=re.I)[0]
     )
 
     # Nutrient Density
@@ -319,35 +327,139 @@ async def scrape_all_menus(days: int = 14) -> list:
     rows = [r for chunk in chunks for r in chunk]
     return rows
 
-def main():
-    print("🍽️  Scraping UMich dining menus for the next 14 days...")
-    print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    # Scrape data
-    menus = asyncio.run(scrape_all_menus(14))
-    
-    # Add metadata
+def push_to_database(db_url: str, rows: list):
+    """Upsert scraped rows into Supabase Postgres (tables: items, offerings).
+
+    Historical rows are never touched. For (date, hall, meal) groups that were
+    scraped successfully this run, future-dated offerings that no longer appear
+    on the menu are removed so the site doesn't show stale items. A hall whose
+    page failed to fetch produces no groups, so its existing data is preserved.
+    """
+    import psycopg2
+    from psycopg2.extras import execute_values
+
+    # Unique items by key; last-seen display name wins
+    item_names = {r["item_key"]: r["item_display"] for r in rows}
+
+    conn = psycopg2.connect(db_url)
+    try:
+        with conn, conn.cursor() as cur:
+            item_rows = execute_values(
+                cur,
+                """
+                insert into items (item_key, name) values %s
+                on conflict (item_key) do update set name = excluded.name
+                returning id, item_key
+                """,
+                list(item_names.items()),
+                fetch=True,
+                page_size=500,
+            )
+            id_by_key = {key: item_id for item_id, key in item_rows}
+
+            # Dedup on the conflict target so one batch can't update a row twice
+            offerings = {}
+            for r in rows:
+                item_id = id_by_key[r["item_key"]]
+                station = r.get("station") or ""
+                conflict_key = (r["date"], r["hall"], r["meal"], station, item_id)
+                n = r["nutrition"]
+                offerings[conflict_key] = (
+                    item_id, r["date"], r["hall"], r["meal"], station,
+                    r["nutrient_density"], r["carbon_footprint"], r["other_tags"],
+                    n["calories"], n["total_fat"], n["total_carbohydrate"],
+                    n["protein"], n["sodium"],
+                )
+
+            offering_rows = execute_values(
+                cur,
+                """
+                insert into offerings (item_id, date, hall, meal, station,
+                    nutrient_density, carbon_footprint, tags, calories,
+                    total_fat, total_carbohydrate, protein, sodium)
+                values %s
+                on conflict (date, hall, meal, station, item_id) do update set
+                    nutrient_density = excluded.nutrient_density,
+                    carbon_footprint = excluded.carbon_footprint,
+                    tags = excluded.tags,
+                    calories = excluded.calories,
+                    total_fat = excluded.total_fat,
+                    total_carbohydrate = excluded.total_carbohydrate,
+                    protein = excluded.protein,
+                    sodium = excluded.sodium,
+                    scraped_at = now()
+                returning id
+                """,
+                list(offerings.values()),
+                fetch=True,
+                page_size=500,
+            )
+            kept_ids = [row[0] for row in offering_rows]
+
+            groups = {(r["date"], r["hall"], r["meal"]) for r in rows}
+            cur.execute(
+                "create temp table scraped_groups (date date, hall text, meal text) on commit drop"
+            )
+            execute_values(cur, "insert into scraped_groups values %s", sorted(groups))
+            cur.execute(
+                """
+                delete from offerings o
+                using scraped_groups g
+                where o.date = g.date and o.hall = g.hall and o.meal = g.meal
+                  and o.date >= current_date
+                  and o.id not in (select unnest(%s::bigint[]))
+                """,
+                (kept_ids,),
+            )
+            removed = cur.rowcount
+
+        print(f"🗄️  Upserted {len(id_by_key)} items and {len(kept_ids)} offerings; removed {removed} stale future offerings")
+    finally:
+        conn.close()
+
+
+def write_json(rows: list, days: int):
     output = {
         "last_updated": datetime.now().isoformat(),
         "date_range": {
             "start": datetime.today().strftime("%Y-%m-%d"),
-            "end": (datetime.today() + timedelta(days=14)).strftime("%Y-%m-%d"),
+            "end": (datetime.today() + timedelta(days=days)).strftime("%Y-%m-%d"),
         },
-        "total_items": len(menus),
-        "menus": menus
+        "total_items": len(rows),
+        "menus": rows,
     }
-    
-    # Ensure output directory exists
-    output_dir = Path(__file__).parent / "client" / "public"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Write to file
-    output_file = output_dir / "menus.json"
+    output_file = Path(__file__).parent / "menus.json"
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
-    
-    print(f"✅ Scraped {len(menus)} menu items")
     print(f"📝 Saved to: {output_file}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Scrape UMich dining menus into Supabase")
+    parser.add_argument("--json", action="store_true",
+                        help="write menus.json next to this script instead of requiring a database")
+    parser.add_argument("--days", type=int, default=14, help="days ahead to scrape (default 14)")
+    args = parser.parse_args()
+
+    db_url = os.environ.get("SUPABASE_DB_URL")
+    if not db_url and not args.json:
+        sys.exit("SUPABASE_DB_URL is not set. Set it to your Supabase Session-pooler "
+                 "connection string, or pass --json for a local file run.")
+
+    print(f"🍽️  Scraping UMich dining menus for the next {args.days} days...")
+    print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    menus = asyncio.run(scrape_all_menus(args.days))
+    if not menus:
+        sys.exit("❌ Scrape returned 0 items — refusing to touch the database.")
+
+    print(f"✅ Scraped {len(menus)} menu items")
+
+    if db_url:
+        push_to_database(db_url, menus)
+    if args.json:
+        write_json(menus, args.days)
+
     print(f"Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 if __name__ == "__main__":

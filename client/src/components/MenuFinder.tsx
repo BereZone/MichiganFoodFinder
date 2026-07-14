@@ -68,7 +68,7 @@ const MenuFinder: React.FC = () => {
             setError(null);
 
             try {
-                const response = await fetch('/menus.json');
+                const response = await fetch('/api/menus');
                 if (!response.ok) {
                     throw new Error('Failed to load menu data');
                 }

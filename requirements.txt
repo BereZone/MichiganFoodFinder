@@ -1,7 +1,4 @@
 aiohttp
 beautifulsoup4
 certifi
-gunicorn
-fastapi
-uvicorn
-
+psycopg2-binary

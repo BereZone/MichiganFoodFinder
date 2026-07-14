@@ -12,3 +12,6 @@ __pycache__/
 # Old server files
 Procfile
 menu_items_with_counts.txt
+
+# Local scraper output (scrape_menus.py --json)
+/menus.json

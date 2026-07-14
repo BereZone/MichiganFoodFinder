@@ -1,43 +1,38 @@
-name: Update Menus
+name: Scrape Menus
 
 on:
   schedule:
-    # Run every 6 hours
+    # Every 6 hours
     - cron: '0 */6 * * *'
   workflow_dispatch: # Allow manual trigger
 
 permissions:
-  contents: write
+  contents: read
+  actions: write # required by the keep-alive step to re-enable this workflow
 
 jobs:
-  scrape-and-commit:
+  scrape:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.12'
+          cache: pip
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        run: pip install -r requirements.txt
 
-      - name: Run Scraper
-        run: python scripts/generate_menus.py
+      - name: Scrape menus into Supabase
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python scrape_menus.py
 
-      - name: Commit and Push changes
-        run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
-          # Check if there are changes
-          if [[ -n $(git status -s client/public/menus.json) ]]; then
-            git add client/public/menus.json
-            git commit -m "Auto-update menus.json [skip ci]"
-            git push
-          else
-            echo "No changes in menu data."
-          fi
+      # GitHub pauses scheduled workflows after 60 days without repo activity;
+      # this re-enables the workflow via the API so the schedule never dies.
+      - name: Keep workflow alive
+        if: ${{ always() }}
+        uses: gautamkrishnar/keepalive-workflow@v2
