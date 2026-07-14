@@ -8,14 +8,16 @@ Michigan Food Finder shows University of Michigan dining hall menus in one place
 
 ## Architecture
 
-- `scrape_menus.py` — Python scraper, run every 6 hours by GitHub Actions, upserts into Supabase Postgres (`supabase/schema.sql`).
-- `api/menus.js` — Vercel serverless function that queries Supabase with the anon key.
+- `extension/` — Chrome extension that relays menus from dining.umich.edu (which blocks server-side clients) into the database via `/api/ingest` (see [docs/browser-relay.md](docs/browser-relay.md)).
+- `scrape_menus.py` — Python scraper for GitHub Actions; currently paused because the dining site Cloudflare-blocks non-browser clients.
+- `api/menus.js` — Vercel serverless function that queries Supabase Postgres (`supabase/schema.sql`) with the anon key.
 - `client/` — React + Vite + TypeScript + Tailwind frontend, reads from `/api/menus`.
 
 ## Documentation
 
 - Quick start: [docs/development.md](docs/development.md)
 - Production setup (Supabase, secrets, Vercel): [docs/setup.md](docs/setup.md)
+- Menu syncing via the browser relay: [docs/browser-relay.md](docs/browser-relay.md)
 - Release process: [docs/releasing.md](docs/releasing.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)

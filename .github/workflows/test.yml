@@ -36,10 +36,15 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Syntax-check serverless function and local server
+      - name: Syntax-check serverless functions, local server, and extension
         run: |
           node --check api/menus.js
+          node --check api/ingest.js
           node --check local-server.js
+          node --check extension/background.js
+          node --check extension/offscreen.js
+          node --check extension/popup.js
+          node -e "JSON.parse(require('fs').readFileSync('extension/manifest.json'))"
 
   client:
     name: Client build

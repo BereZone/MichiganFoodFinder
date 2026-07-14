@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser-relay fallback for the Cloudflare-blocked dining site: Chrome extension (`extension/`) that parses menus in the user's own browser session and posts them to a new token-protected `/api/ingest` endpoint (see `docs/browser-relay.md`).
 - Supabase Postgres database as the menu data store (`supabase/schema.sql`: `items` and `offerings` tables, full history retained, public-read RLS).
 - Keep-alive step in the scrape workflow so GitHub does not pause the schedule on inactive repos.
 - `--json` flag on `scrape_menus.py` for a no-database local run that writes `menus.json` at the repo root.
