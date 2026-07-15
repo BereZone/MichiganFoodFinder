@@ -42,6 +42,7 @@ jobs:
           node --check api/ingest.js
           node --check local-server.js
           node --check extension/background.js
+          node --check extension/parser.js
           node --check extension/offscreen.js
           node --check extension/popup.js
           node -e "JSON.parse(require('fs').readFileSync('extension/manifest.json'))"

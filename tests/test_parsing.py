@@ -1,5 +1,6 @@
 """Offline unit tests for the scraper's parsing helpers (no network access)."""
 
+import pathlib
 import unittest
 
 from bs4 import BeautifulSoup
@@ -9,9 +10,12 @@ from scrape_menus import (
     normalize_cf,
     normalize_nd,
     normalize_spaces,
+    parse_menu_html,
     parse_nutrition_from_li,
     parse_tags_from_li_text,
 )
+
+FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "bursley_2026-07-15.html"
 
 
 class TestNormalization(unittest.TestCase):
@@ -93,6 +97,33 @@ class TestNutritionParsing(unittest.TestCase):
                 "sodium": None,
             },
         )
+
+
+class TestRealPageFixture(unittest.TestCase):
+    """Parse a real menu page saved 2026-07-15 (post-redesign markup)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rows = parse_menu_html(
+            FIXTURE.read_text(encoding="utf-8"),
+            "Bursley", "2026-07-15", ["Breakfast", "Lunch", "Dinner"],
+        )
+
+    def test_parses_a_full_day(self):
+        self.assertGreater(len(self.rows), 50)
+        self.assertEqual({r["meal"] for r in self.rows}, {"Breakfast", "Lunch", "Dinner"})
+        self.assertIn("Hot Cereal", {r["station"] for r in self.rows})
+
+    def test_known_item_details(self):
+        oat = next(r for r in self.rows if r["item_display"] == "Oatmeal")
+        self.assertEqual(oat["nutrition"]["calories"], 183)
+        self.assertEqual(oat["nutrition"]["protein"], "6g")
+        self.assertEqual(oat["carbon_footprint"], "Low")
+        self.assertIn("Vegan", oat["other_tags"])
+
+    def test_nutrition_coverage(self):
+        with_cal = sum(1 for r in self.rows if r["nutrition"]["calories"] is not None)
+        self.assertGreater(with_cal / len(self.rows), 0.9)
 
 
 if __name__ == "__main__":

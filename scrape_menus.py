@@ -201,8 +201,17 @@ async def parse_menu_for_day_hall(session, hall_name: str, base_url: str, date: 
     html = await fetch_text(session, url)
     if not html:
         return []
+    return parse_menu_html(html, hall_name, date_str, meals)
 
-    soup = BeautifulSoup(html, "html.parser")
+
+def parse_menu_html(html: str, hall_name: str, date_str: str, meals: list) -> list:
+    """Parse one hall/day menu page into result rows. Pure and testable.
+
+    Uses html5lib: the menu markup is malformed (unclosed lists) and only the
+    browser parsing algorithm recovers it the way real browsers — and the
+    relay extension's DOMParser — do. html.parser silently drops stations.
+    """
+    soup = BeautifulSoup(html, "html5lib")
     results = []
 
     # Map normalized lower meal name -> the h3 element
@@ -266,18 +275,33 @@ async def parse_menu_for_day_hall(session, hall_name: str, base_url: str, date: 
                          # Maybe it's not a station LI, or empty station
                          continue
                          
-                    items = items_ul.find_all("div", class_="item-name")
+                    # Markup as of mid-2026: each item is <li> with an
+                    # .item-name (span, formerly div), tags in <ul class=traits>,
+                    # and the nutrition table in a <div class=nutrition> that is
+                    # the li's NEXT SIBLING. Older markup kept nutrition inside
+                    # the li — both are handled.
+                    items = items_ul.find_all(class_="item-name")
                     seen_for_section = set()
-                    
+
                     for it in items:
                         display = normalize_spaces(it.get_text(strip=True))
                         if not display:
                             continue
 
                         li = it.find_parent("li")
-                        li_text = normalize_spaces(li.get_text(" ", strip=True)) if li else display
-                        nutrient_density, carbon_footprint, other_tags, other_tags_str = parse_tags_from_li_text(li_text)
-                        nutrition = parse_nutrition_from_li(li)
+                        traits = li.find("ul", class_="traits") if li else None
+                        if traits:
+                            tag_text = normalize_spaces(traits.get_text(" ", strip=True))
+                        else:
+                            tag_text = normalize_spaces(li.get_text(" ", strip=True)) if li else display
+                        nutrient_density, carbon_footprint, other_tags, other_tags_str = parse_tags_from_li_text(tag_text)
+
+                        nut_el = li
+                        if li:
+                            sib = li.find_next_sibling()
+                            if sib and sib.name == "div" and "nutrition" in (sib.get("class") or []):
+                                nut_el = sib
+                        nutrition = parse_nutrition_from_li(nut_el)
 
                         k = item_key(display)
                         unique_id = f"{k}|{current_station}"

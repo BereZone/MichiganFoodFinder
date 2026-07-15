@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep-alive step in the scrape workflow so GitHub does not pause the schedule on inactive repos.
 - `--json` flag on `scrape_menus.py` for a no-database local run that writes `menus.json` at the repo root.
 
+### Fixed
+
+- Menu parsers updated for the redesigned dining.umich.edu markup (mid-2026): `span.item-name`, structured `ul.traits` tags, and nutrition tables as sibling `div.nutrition` elements. Python now parses with html5lib because the site's malformed lists are only recovered correctly by the browser parsing algorithm.
+
 ### Changed
 
 - `/api/menus` now queries Supabase (anon key) instead of serving a committed static JSON file.

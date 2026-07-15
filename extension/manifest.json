@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Michigan Food Finder — Menu Relay",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Relays UMich dining menus from your browser to your Michigan Food Finder database.",
     "permissions": ["alarms", "offscreen", "storage", "notifications"],
     "host_permissions": ["https://dining.umich.edu/*"],
