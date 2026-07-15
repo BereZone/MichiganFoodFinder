@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { MenuItem } from '../types';
+import { useAuth } from '../hooks/useAuth';
+import { useFavorites } from '../hooks/useFavorites';
+import MyMenu from './MyMenu';
 
 const DINING_HALLS = [
     "Bursley",
@@ -39,11 +42,13 @@ const MenuFinder: React.FC = () => {
         return false;
     });
 
+    // Auth + Favorites (synced to the account when signed in,
+    // localStorage-only when signed out — the site works fully without login)
+    const { session, signIn, signOut, enabled: authEnabled } = useAuth();
+    const { favorites, toggleFavorite } = useFavorites(session);
+    const [view, setView] = useState<'browse' | 'mymenu'>('browse');
+
     // Data States
-    const [favorites, setFavorites] = useState<string[]>(() => {
-        const saved = localStorage.getItem('umich-dining-favorites');
-        return saved ? JSON.parse(saved) : [];
-    });
     const [currentPage, setCurrentPage] = useState(1);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<string>('');
@@ -129,11 +134,6 @@ const MenuFinder: React.FC = () => {
         window.history.replaceState({}, '', newUrl);
     }, [searchTerm, selectedHalls, selectedTags, selectedDate, selectedMeal, showFavorites]);
 
-    // Persist Favorites
-    useEffect(() => {
-        localStorage.setItem('umich-dining-favorites', JSON.stringify(favorites));
-    }, [favorites]);
-
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
@@ -201,12 +201,6 @@ const MenuFinder: React.FC = () => {
         );
     };
 
-    const toggleFavorite = (itemKey: string) => {
-        setFavorites(prev =>
-            prev.includes(itemKey) ? prev.filter(k => k !== itemKey) : [...prev, itemKey]
-        );
-    };
-
     const handleOpenNow = () => {
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
@@ -246,6 +240,7 @@ const MenuFinder: React.FC = () => {
         setSelectedHalls([]);
         setSelectedTags([]);
         setShowFavorites(false);
+        setView('browse');
     };
 
     const addToCalendar = (item: MenuItem) => {
@@ -294,6 +289,31 @@ const MenuFinder: React.FC = () => {
         <div className="min-h-screen p-4 sm:p-8 font-sans text-gray-900 bg-gray-50 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200">
             <div className="max-w-7xl mx-auto">
                 <header className="mb-8 text-center relative">
+                    {authEnabled && (
+                        <div className="absolute top-0 left-0 flex items-center gap-2">
+                            {session ? (
+                                <>
+                                    <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400 max-w-40 truncate" title={session.user.email}>
+                                        {session.user.email}
+                                    </span>
+                                    <button
+                                        onClick={signOut}
+                                        className="p-2 px-4 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-medium transition-colors hover:bg-gray-300 dark:hover:bg-gray-600"
+                                    >
+                                        Sign out
+                                    </button>
+                                </>
+                            ) : (
+                                <button
+                                    onClick={signIn}
+                                    className="p-2 px-4 rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 text-xs font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2"
+                                    title="Sign in to sync favorites across devices"
+                                >
+                                    <span className="font-bold text-blue-600 dark:text-blue-400">G</span> Sign in
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <button
                         onClick={() => setDarkMode(!darkMode)}
                         className="absolute top-0 right-0 p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-yellow-300 transition-colors hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2 px-4"
@@ -331,6 +351,41 @@ const MenuFinder: React.FC = () => {
                     </div>
                 </header>
 
+                {/* View switch: Browse / My Menu */}
+                <div className="flex justify-center mb-6">
+                    <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden shadow-sm">
+                        <button
+                            onClick={() => setView('browse')}
+                            className={`px-6 py-2 text-sm font-medium transition-colors ${view === 'browse'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                                }`}
+                        >
+                            🍽️ Browse
+                        </button>
+                        <button
+                            onClick={() => setView('mymenu')}
+                            className={`px-6 py-2 text-sm font-medium transition-colors ${view === 'mymenu'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                                }`}
+                        >
+                            ★ My Menu{favorites.length > 0 ? ` (${favorites.length})` : ''}
+                        </button>
+                    </div>
+                </div>
+
+                {view === 'mymenu' ? (
+                    <MyMenu
+                        items={items}
+                        favorites={favorites}
+                        toggleFavorite={toggleFavorite}
+                        addToCalendar={addToCalendar}
+                        signedIn={session !== null}
+                        authEnabled={authEnabled}
+                    />
+                ) : (
+                <>
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8 transition-all duration-300 hover:shadow-xl">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {/* Search */}
@@ -582,6 +637,8 @@ const MenuFinder: React.FC = () => {
                         </div>
                     </div>
                 </div>
+                </>
+                )}
             </div>
         </div>
     );

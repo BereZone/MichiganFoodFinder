@@ -18,6 +18,7 @@ Michigan Food Finder shows University of Michigan dining hall menus in one place
 - Quick start: [docs/development.md](docs/development.md)
 - Production setup (Supabase, secrets, Vercel): [docs/setup.md](docs/setup.md)
 - Menu syncing via the browser relay: [docs/browser-relay.md](docs/browser-relay.md)
+- Google sign-in + synced favorites: [docs/auth-setup.md](docs/auth-setup.md)
 - Release process: [docs/releasing.md](docs/releasing.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
