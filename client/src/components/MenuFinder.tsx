@@ -203,13 +203,15 @@ const MenuFinder: React.FC = () => {
 
     const handleOpenNow = () => {
         const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
-        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
-        const isWeekend = day === 0 || day === 6;
-
-        const hour = now.getHours();
-        const minutes = now.getMinutes();
-        const time = hour + minutes / 60;
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Detroit',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+        }).formatToParts(now);
+        const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+        const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
+        const isWeekend = get('weekday') === 'Sun' || get('weekday') === 'Sat';
+        const time = parseInt(get('hour'), 10) + parseInt(get('minute'), 10) / 60;
 
         let meal = '';
 
@@ -520,7 +522,8 @@ const MenuFinder: React.FC = () => {
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 {paginatedItems.map((item, idx) => {
                                     const isFav = favorites.includes(item.item_key);
-                                    const showStationHeader = idx === 0 || item.station !== paginatedItems[idx - 1].station;
+                                    const absoluteIdx = (currentPage - 1) * ITEMS_PER_PAGE + idx;
+                                    const showStationHeader = absoluteIdx === 0 || item.station !== filteredItems[absoluteIdx - 1].station;
 
                                     return (
                                         <React.Fragment key={`${item.item_key}-${item.date}-${item.meal}-${item.hall}-${idx}`}>
@@ -545,6 +548,7 @@ const MenuFinder: React.FC = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.date}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.meal === 'Breakfast' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                        item.meal === 'Brunch' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
                                                         item.meal === 'Lunch' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                                                             'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
                                                         }`}>
