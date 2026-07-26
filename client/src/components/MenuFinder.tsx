@@ -10,7 +10,7 @@ const DINING_HALLS = [
 ];
 
 const MEALS = ['Breakfast', 'Brunch', 'Lunch', 'Dinner'];
-const ITEMS_PER_PAGE = 24;
+const DATES_PER_PAGE = 3;
 
 const MEAL_COLORS: Record<string, string> = {
     Breakfast: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
@@ -19,25 +19,34 @@ const MEAL_COLORS: Record<string, string> = {
     Dinner:    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
 };
 
+function formatLongDate(dateStr: string): string {
+    const d = new Date(`${dateStr}T12:00:00`);
+    return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
 function formatShortDate(dateStr: string): string {
     const d = new Date(`${dateStr}T12:00:00`);
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-const SkeletonCard = () => (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden animate-pulse">
-        <div className="px-4 pt-4 pb-3 flex items-center gap-2">
-            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-700 rounded-md" />
-            <div className="h-4 w-24 bg-gray-100 dark:bg-slate-700/60 rounded" />
+function localToday(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const SkeletonGroup = () => (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden animate-pulse mb-3">
+        <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-700/40 border-b border-gray-100 dark:border-slate-700/50">
+            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded-md" />
+            <div className="h-4 w-28 bg-gray-200 dark:bg-slate-600 rounded" />
         </div>
-        <div className="px-4 pb-4">
-            <div className="h-4 w-3/4 bg-gray-200 dark:bg-slate-700 rounded mb-2" />
-            <div className="h-3 w-1/2 bg-gray-100 dark:bg-slate-700/60 rounded" />
-        </div>
-        <div className="px-4 py-3 border-t border-gray-100 dark:border-slate-700/50 flex justify-between">
-            <div className="h-3 w-14 bg-gray-100 dark:bg-slate-700/60 rounded" />
-            <div className="h-3 w-5 bg-gray-100 dark:bg-slate-700/60 rounded" />
-        </div>
+        {[1, 2, 3, 4].map(i => (
+            <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 dark:border-slate-700/30 last:border-0">
+                <div className="h-4 w-4 bg-gray-200 dark:bg-slate-700 rounded shrink-0" />
+                <div className="h-4 bg-gray-100 dark:bg-slate-700/60 rounded flex-1" />
+                <div className="h-3 w-12 bg-gray-100 dark:bg-slate-700/60 rounded shrink-0" />
+            </div>
+        ))}
     </div>
 );
 
@@ -69,6 +78,7 @@ const MenuFinder: React.FC = () => {
 
     const { session, signIn, signOut, enabled: authEnabled } = useAuth();
     const { favorites, toggleFavorite } = useFavorites(session);
+    const today = useMemo(localToday, []);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -119,7 +129,7 @@ const MenuFinder: React.FC = () => {
         if (p.get('favs') === 'true') setShowFavorites(true);
     }, []);
 
-    // Sync state → URL on change
+    // Sync state → URL
     useEffect(() => {
         const p = new URLSearchParams();
         if (searchTerm) p.set('q', searchTerm);
@@ -131,7 +141,7 @@ const MenuFinder: React.FC = () => {
         window.history.replaceState({}, '', `${window.location.pathname}?${p.toString()}`);
     }, [searchTerm, selectedHalls, selectedTags, selectedDate, selectedMeal, showFavorites]);
 
-    // Reset to page 1 whenever filters change
+    // Reset to page 1 on filter change
     useEffect(() => { setCurrentPage(1); },
         [searchTerm, selectedHalls, selectedTags, selectedDate, selectedMeal, showFavorites]);
 
@@ -165,10 +175,28 @@ const MenuFinder: React.FC = () => {
         return matchesSearch && matchesHall && matchesDate && matchesMeal && matchesFavorites && matchesTags;
     }), [items, searchTerm, selectedHalls, selectedDate, selectedMeal, selectedTags, showFavorites, favorites]);
 
-    const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-    const paginatedItems = filteredItems.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
+    // Group: date → meal → hall → station → items[]
+    const grouped = useMemo(() => {
+        const result = new Map<string, Map<string, Map<string, Map<string, MenuItem[]>>>>();
+        for (const item of filteredItems) {
+            if (!result.has(item.date)) result.set(item.date, new Map());
+            const meals = result.get(item.date)!;
+            if (!meals.has(item.meal)) meals.set(item.meal, new Map());
+            const halls = meals.get(item.meal)!;
+            if (!halls.has(item.hall)) halls.set(item.hall, new Map());
+            const stations = halls.get(item.hall)!;
+            const stKey = item.station ?? '';
+            if (!stations.has(stKey)) stations.set(stKey, []);
+            stations.get(stKey)!.push(item);
+        }
+        return result;
+    }, [filteredItems]);
+
+    const allDates = useMemo(() => Array.from(grouped.keys()), [grouped]);
+    const totalPages = Math.max(1, Math.ceil(allDates.length / DATES_PER_PAGE));
+    const visibleDates = allDates.slice(
+        (currentPage - 1) * DATES_PER_PAGE,
+        currentPage * DATES_PER_PAGE
     );
 
     const activeFilterCount = [
@@ -236,7 +264,6 @@ const MenuFinder: React.FC = () => {
             {/* ── Sticky header ── */}
             <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-gray-200/70 dark:border-slate-800">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-                    {/* Brand */}
                     <div className="flex items-center gap-2.5 shrink-0">
                         <div className="w-7 h-7 rounded-lg bg-[#00274C] flex items-center justify-center shrink-0 shadow-sm">
                             <span className="text-[#FFCB05] font-extrabold text-sm leading-none">M</span>
@@ -245,35 +272,22 @@ const MenuFinder: React.FC = () => {
                             Michigan Food Finder
                         </span>
                     </div>
-
-                    {/* Auth + dark mode */}
                     <div className="flex items-center gap-2">
                         {authEnabled && (session ? (
                             <>
                                 <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 max-w-[9rem] truncate">
                                     {session.user.email}
                                 </span>
-                                <button
-                                    onClick={signOut}
-                                    className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors font-medium"
-                                >
+                                <button onClick={signOut} className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors font-medium">
                                     Sign out
                                 </button>
                             </>
                         ) : (
-                            <button
-                                onClick={signIn}
-                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center gap-1.5"
-                                title="Sign in to sync favorites across devices"
-                            >
+                            <button onClick={signIn} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center gap-1.5" title="Sign in to sync favorites across devices">
                                 <span className="font-bold text-blue-600 dark:text-blue-400">G</span> Sign in
                             </button>
                         ))}
-                        <button
-                            onClick={() => setDarkMode(!darkMode)}
-                            className="p-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
-                            title="Toggle dark mode"
-                        >
+                        <button onClick={() => setDarkMode(!darkMode)} className="p-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors" title="Toggle dark mode">
                             {darkMode ? '🌙' : '☀️'}
                         </button>
                     </div>
@@ -294,7 +308,7 @@ const MenuFinder: React.FC = () => {
                     </p>
                     <button
                         onClick={handleOpenNow}
-                        className="inline-flex items-center gap-2 px-7 py-2.5 bg-[#FFCB05] hover:bg-[#e6b800] text-[#00274C] font-bold rounded-full shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-100 active:shadow-md"
+                        className="inline-flex items-center gap-2 px-7 py-2.5 bg-[#FFCB05] hover:bg-[#e6b800] text-[#00274C] font-bold rounded-full shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-100"
                     >
                         <span>🕒</span> What's Open Now
                     </button>
@@ -336,7 +350,6 @@ const MenuFinder: React.FC = () => {
                     />
                 ) : (
                     <>
-                        {/* ── Error ── */}
                         {error && (
                             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 mb-6 text-center text-sm text-red-600 dark:text-red-400">
                                 {error}
@@ -424,19 +437,17 @@ const MenuFinder: React.FC = () => {
                                 </button>
                                 <div className="flex-1" />
                                 <span className="text-xs text-gray-400 dark:text-gray-500">
-                                    {filteredItems.length.toLocaleString()} result{filteredItems.length !== 1 ? 's' : ''}
+                                    {filteredItems.length.toLocaleString()} item{filteredItems.length !== 1 ? 's' : ''}
+                                    {allDates.length > 0 && ` · ${allDates.length} date${allDates.length !== 1 ? 's' : ''}`}
                                 </span>
                                 {activeFilterCount > 0 && (
-                                    <button
-                                        onClick={clearAllFilters}
-                                        className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 underline transition-colors"
-                                    >
+                                    <button onClick={clearAllFilters} className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 underline transition-colors">
                                         Clear all
                                     </button>
                                 )}
                             </div>
 
-                            {/* Tag panel (collapsible) */}
+                            {/* Tag panel */}
                             {showTagFilter && (
                                 <div className="flex flex-wrap gap-1.5 pt-2 border-t border-gray-100 dark:border-slate-700/50 max-h-32 overflow-y-auto">
                                     {uniqueTags.map(tag => (
@@ -458,10 +469,17 @@ const MenuFinder: React.FC = () => {
 
                         {/* ── Results ── */}
                         {loading ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {Array.from({ length: 9 }).map((_, i) => <SkeletonCard key={i} />)}
-                            </div>
-                        ) : paginatedItems.length === 0 ? (
+                            <>
+                                {[1, 2].map(i => (
+                                    <div key={i} className="mb-8">
+                                        <div className="h-5 w-44 bg-gray-200 dark:bg-slate-700 rounded animate-pulse mb-3" />
+                                        <SkeletonGroup />
+                                        <SkeletonGroup />
+                                        <SkeletonGroup />
+                                    </div>
+                                ))}
+                            </>
+                        ) : filteredItems.length === 0 ? (
                             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 p-16 text-center">
                                 <p className="text-4xl mb-3">🍽️</p>
                                 <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">Nothing found</p>
@@ -472,127 +490,155 @@ const MenuFinder: React.FC = () => {
                                 </p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {paginatedItems.map((item, idx) => {
-                                    const isFav = favorites.includes(item.item_key);
+                            <>
+                                {visibleDates.map(date => {
+                                    const mealMap = grouped.get(date)!;
                                     return (
-                                        <div
-                                            key={`${item.item_key}-${item.date}-${item.meal}-${item.hall}-${idx}`}
-                                            className={`flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-transparent overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${
-                                                isFav ? 'border-yellow-300/60 dark:border-yellow-500/30 ring-1 ring-yellow-300/40 dark:ring-yellow-500/20' : 'dark:border-slate-700/30'
-                                            }`}
-                                        >
-                                            {/* Card header */}
-                                            <div className="flex items-center justify-between px-4 pt-4 pb-2">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${MEAL_COLORS[item.meal] ?? 'bg-gray-100 text-gray-600'}`}>
-                                                        {item.meal}
+                                        <div key={date} className="mb-8">
+                                            {/* Date heading */}
+                                            <div className="flex items-center gap-2.5 mb-3">
+                                                <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                                                    {formatLongDate(date)}
+                                                </h2>
+                                                {date === today && (
+                                                    <span className="text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                                                        Today
                                                     </span>
-                                                    <span className="text-xs text-gray-400 dark:text-gray-500 truncate">{item.hall}</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => toggleFavorite(item.item_key)}
-                                                    className={`ml-2 text-xl shrink-0 transition-all hover:scale-110 active:scale-95 ${
-                                                        isFav ? 'text-yellow-400' : 'text-gray-200 dark:text-slate-700 hover:text-yellow-400'
-                                                    }`}
-                                                    title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                                                >
-                                                    {isFav ? '★' : '☆'}
-                                                </button>
-                                            </div>
-
-                                            {/* Name + subtitle */}
-                                            <div className="px-4 pb-3 flex-1">
-                                                <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-snug">
-                                                    {item.item_display}
-                                                </h3>
-                                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                                    {[item.station, formatShortDate(item.date)].filter(Boolean).join(' · ')}
-                                                </p>
-                                            </div>
-
-                                            {/* Tags */}
-                                            {(item.nutrient_density || item.carbon_footprint || item.other_tags.length > 0) && (
-                                                <div className="px-4 pb-3 flex flex-wrap gap-1">
-                                                    {item.nutrient_density && (
-                                                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                                                            ND: {item.nutrient_density}
-                                                        </span>
-                                                    )}
-                                                    {item.carbon_footprint && (
-                                                        <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                                            CF: {item.carbon_footprint}
-                                                        </span>
-                                                    )}
-                                                    {item.other_tags.slice(0, 3).map(tag => (
-                                                        <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400">
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                    {item.other_tags.length > 3 && (
-                                                        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 dark:bg-slate-700 dark:text-slate-500">
-                                                            +{item.other_tags.length - 3}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* Card footer: calories + calendar */}
-                                            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-slate-900/40 border-t border-gray-100 dark:border-slate-700/50 mt-auto">
-                                                {item.nutrition?.calories != null ? (
-                                                    <div className="group relative">
-                                                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 cursor-default select-none">
-                                                            {item.nutrition.calories} kcal
-                                                        </span>
-                                                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-40 bg-gray-900 dark:bg-slate-700 text-white text-xs rounded-xl p-2.5 z-10 shadow-xl pointer-events-none">
-                                                            <div className="space-y-1">
-                                                                {item.nutrition.total_fat && <div className="flex justify-between"><span className="text-gray-400">Fat</span><span>{item.nutrition.total_fat}</span></div>}
-                                                                {item.nutrition.total_carbohydrate && <div className="flex justify-between"><span className="text-gray-400">Carbs</span><span>{item.nutrition.total_carbohydrate}</span></div>}
-                                                                {item.nutrition.protein && <div className="flex justify-between"><span className="text-gray-400">Protein</span><span>{item.nutrition.protein}</span></div>}
-                                                                {item.nutrition.sodium && <div className="flex justify-between"><span className="text-gray-400">Sodium</span><span>{item.nutrition.sodium}</span></div>}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-gray-300 dark:text-slate-700">—</span>
                                                 )}
-                                                <button
-                                                    onClick={() => addToCalendar(item)}
-                                                    className="text-gray-300 dark:text-slate-700 hover:text-blue-500 dark:hover:text-blue-400 transition-colors text-base"
-                                                    title="Add to Google Calendar"
-                                                >
-                                                    📅
-                                                </button>
+                                            </div>
+
+                                            {/* One card per meal × hall */}
+                                            <div className="space-y-3">
+                                                {[...mealMap.entries()]
+                                                    .sort(([a], [b]) => MEALS.indexOf(a) - MEALS.indexOf(b))
+                                                    .flatMap(([meal, hallMap]) =>
+                                                        [...hallMap.entries()]
+                                                            .sort(([a], [b]) => a.localeCompare(b))
+                                                            .map(([hall, stationMap]) => (
+                                                                <div
+                                                                    key={`${meal}-${hall}`}
+                                                                    className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden"
+                                                                >
+                                                                    {/* Card header: meal badge + hall name */}
+                                                                    <div className="flex items-center gap-2.5 px-4 py-3 bg-gray-50 dark:bg-slate-700/40 border-b border-gray-100 dark:border-slate-700/50">
+                                                                        <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${MEAL_COLORS[meal] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                                            {meal}
+                                                                        </span>
+                                                                        <span className="font-semibold text-sm text-gray-800 dark:text-gray-100">{hall}</span>
+                                                                    </div>
+
+                                                                    {/* Station groups → item rows */}
+                                                                    {[...stationMap.entries()].map(([station, stationItems]) => (
+                                                                        <div key={station}>
+                                                                            {station && (
+                                                                                <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-50/60 dark:bg-slate-900/20 border-b border-gray-100 dark:border-slate-700/30">
+                                                                                    {station}
+                                                                                </div>
+                                                                            )}
+                                                                            {stationItems.map((item, idx) => {
+                                                                                const isFav = favorites.includes(item.item_key);
+                                                                                return (
+                                                                                    <div
+                                                                                        key={`${item.item_key}-${idx}`}
+                                                                                        className={`flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-slate-700/30 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors ${isFav ? 'bg-yellow-50/60 dark:bg-yellow-900/10' : ''}`}
+                                                                                    >
+                                                                                        <button
+                                                                                            onClick={() => toggleFavorite(item.item_key)}
+                                                                                            className={`text-lg shrink-0 transition-all hover:scale-110 active:scale-95 ${isFav ? 'text-yellow-400' : 'text-gray-200 dark:text-slate-700 hover:text-yellow-400'}`}
+                                                                                            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                                                                                        >
+                                                                                            {isFav ? '★' : '☆'}
+                                                                                        </button>
+                                                                                        <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white min-w-0 truncate">
+                                                                                            {item.item_display}
+                                                                                        </span>
+                                                                                        {/* Tags — hidden on small screens to keep rows compact */}
+                                                                                        <div className="hidden sm:flex items-center gap-1 shrink-0">
+                                                                                            {item.nutrient_density && (
+                                                                                                <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                                                                                    ND: {item.nutrient_density}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {item.carbon_footprint && (
+                                                                                                <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                                                                    CF: {item.carbon_footprint}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {item.other_tags.slice(0, 2).map(tag => (
+                                                                                                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400">
+                                                                                                    {tag}
+                                                                                                </span>
+                                                                                            ))}
+                                                                                            {item.other_tags.length > 2 && (
+                                                                                                <span className="text-xs text-gray-400 dark:text-slate-500">
+                                                                                                    +{item.other_tags.length - 2}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        {/* Calories with macro tooltip */}
+                                                                                        {item.nutrition?.calories != null ? (
+                                                                                            <div className="group relative shrink-0">
+                                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap tabular-nums cursor-default">
+                                                                                                    {item.nutrition.calories} kcal
+                                                                                                </span>
+                                                                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-40 bg-gray-900 dark:bg-slate-700 text-white text-xs rounded-xl p-2.5 z-10 shadow-xl pointer-events-none">
+                                                                                                    <div className="space-y-1">
+                                                                                                        {item.nutrition.total_fat && <div className="flex justify-between"><span className="text-gray-400">Fat</span><span>{item.nutrition.total_fat}</span></div>}
+                                                                                                        {item.nutrition.total_carbohydrate && <div className="flex justify-between"><span className="text-gray-400">Carbs</span><span>{item.nutrition.total_carbohydrate}</span></div>}
+                                                                                                        {item.nutrition.protein && <div className="flex justify-between"><span className="text-gray-400">Protein</span><span>{item.nutrition.protein}</span></div>}
+                                                                                                        {item.nutrition.sodium && <div className="flex justify-between"><span className="text-gray-400">Sodium</span><span>{item.nutrition.sodium}</span></div>}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <span className="text-xs text-gray-200 dark:text-slate-700 shrink-0 tabular-nums">—</span>
+                                                                                        )}
+                                                                                        <button
+                                                                                            onClick={() => addToCalendar(item)}
+                                                                                            className="text-gray-300 dark:text-slate-700 hover:text-blue-500 dark:hover:text-blue-400 transition-colors text-sm shrink-0"
+                                                                                            title="Add to Google Calendar"
+                                                                                        >
+                                                                                            📅
+                                                                                        </button>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ))
+                                                    )
+                                                }
                                             </div>
                                         </div>
                                     );
                                 })}
-                            </div>
-                        )}
 
-                        {/* ── Pagination ── */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between mt-8">
-                                <span className="text-sm text-gray-400 dark:text-gray-500">
-                                    Page {currentPage} of {totalPages}
-                                </span>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                        disabled={currentPage === 1}
-                                        className="px-4 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                                    >
-                                        ← Prev
-                                    </button>
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="px-4 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-                                    >
-                                        Next →
-                                    </button>
-                                </div>
-                            </div>
+                                {/* ── Pagination ── */}
+                                {totalPages > 1 && (
+                                    <div className="flex items-center justify-between mt-4">
+                                        <span className="text-sm text-gray-400 dark:text-gray-500">
+                                            Page {currentPage} of {totalPages}
+                                        </span>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                                disabled={currentPage === 1}
+                                                className="px-4 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                            >
+                                                ← Prev
+                                            </button>
+                                            <button
+                                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                                disabled={currentPage === totalPages}
+                                                className="px-4 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                            >
+                                                Next →
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </>
                 )}
