@@ -242,7 +242,7 @@ const MenuFinder: React.FC = () => {
                             <span className="text-[#FFCB05] font-extrabold text-sm leading-none">M</span>
                         </div>
                         <span className="font-bold text-gray-900 dark:text-white text-sm hidden sm:block tracking-tight">
-                            UMich Dining
+                            Michigan Food Finder
                         </span>
                     </div>
 
@@ -285,7 +285,7 @@ const MenuFinder: React.FC = () => {
                 {/* ── Hero ── */}
                 <div className="text-center mb-10">
                     <h1 className="text-3xl sm:text-4xl font-extrabold text-[#00274C] dark:text-white tracking-tight mb-2">
-                        UMich Dining
+                        Michigan Food Finder
                     </h1>
                     <p className="text-sm text-gray-400 dark:text-gray-500 mb-6">
                         {dateRange
@@ -600,7 +600,7 @@ const MenuFinder: React.FC = () => {
 
             <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-8 text-center">
                 <p className="text-xs text-gray-300 dark:text-slate-700">
-                    UMich Dining Menu Finder · Not affiliated with the University of Michigan
+                    Michigan Food Finder · Not affiliated with the University of Michigan
                 </p>
             </footer>
         </div>
