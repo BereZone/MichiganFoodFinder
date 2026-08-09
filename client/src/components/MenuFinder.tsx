@@ -4,6 +4,10 @@ import { useAuth } from '../hooks/useAuth';
 import { useFavorites } from '../hooks/useFavorites';
 import MyMenu from './MyMenu';
 import { inferDetroitNow } from '../lib/mealTime';
+import { usePlates } from '../hooks/usePlates';
+import PlateView from './PlateView';
+import { nutritionFromMenuItem } from '../lib/nutrition';
+import { entryId } from '../lib/plateOps';
 
 const DINING_HALLS = [
     'Bursley', 'East Quad', 'Markley', 'Mosher-Jordan',
@@ -66,7 +70,7 @@ const MenuFinder: React.FC = () => {
     const [showFavorites, setShowFavorites] = useState(false);
     const [showTagFilter, setShowTagFilter] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
-    const [view, setView] = useState<'browse' | 'mymenu'>('browse');
+    const [view, setView] = useState<'browse' | 'mymenu' | 'plate'>('browse');
 
     const [darkMode, setDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -79,7 +83,21 @@ const MenuFinder: React.FC = () => {
 
     const { session, signIn, signOut, enabled: authEnabled } = useAuth();
     const { favorites, toggleFavorite } = useFavorites(session);
+    const { plates, getPlate, addItem, setServings, removeItem, clearPlate, syncError } = usePlates(session);
     const today = useMemo(localToday, []);
+
+    // Which plate the Plate tab is showing. Seeded once from whatever is
+    // already in localStorage: the most recently modified non-empty plate,
+    // else today + the current Detroit meal.
+    const [plateSel, setPlateSel] = useState<{ date: string; meal: string }>(() => {
+        const newest = Object.values(plates)
+            .filter(p => p.items.length > 0)
+            .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+        return newest
+            ? { date: newest.date, meal: newest.meal }
+            : inferDetroitNow();
+    });
+    const { date: plateDate, meal: plateMeal } = plateSel;
 
     useEffect(() => {
         const root = document.documentElement;
@@ -205,6 +223,20 @@ const MenuFinder: React.FC = () => {
         !!selectedDate, !!selectedMeal, showFavorites,
     ].filter(Boolean).length;
 
+    const selectedPlate = useMemo(
+        () => getPlate(plateDate, plateMeal),
+        [getPlate, plateDate, plateMeal],
+    );
+
+    // Dates the user can build a plate for: whatever the menus cover, plus the
+    // dates of any plate they already have (so old plates stay reachable).
+    const plateDates = useMemo(() => {
+        const set = new Set<string>(uniqueDates);
+        Object.values(plates).forEach(p => set.add(p.date));
+        if (plateDate) set.add(plateDate);
+        return [...set].sort();
+    }, [uniqueDates, plates, plateDate]);
+
     const clearAllFilters = () => {
         setSearchTerm(''); setSelectedHalls([]); setSelectedTags([]);
         setSelectedDate(''); setSelectedMeal(''); setShowFavorites(false);
@@ -223,6 +255,18 @@ const MenuFinder: React.FC = () => {
         setSelectedMeal(meal);
         setSearchTerm(''); setSelectedHalls([]); setSelectedTags([]);
         setShowFavorites(false); setView('browse');
+    };
+
+    const addToPlate = (item: MenuItem) => {
+        addItem(item.date, item.meal, {
+            item_key: item.item_key,
+            name: item.item_display,
+            hall: item.hall,
+            station: item.station ?? '',
+            servings: 1,
+            nutrition: nutritionFromMenuItem(item),
+        });
+        setPlateSel({ date: item.date, meal: item.meal });
     };
 
     const addToCalendar = (item: MenuItem) => {
@@ -300,7 +344,7 @@ const MenuFinder: React.FC = () => {
                 {/* ── View tabs ── */}
                 <div className="flex justify-center mb-6">
                     <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 gap-1">
-                        {(['browse', 'mymenu'] as const).map(v => (
+                        {(['browse', 'mymenu', 'plate'] as const).map(v => (
                             <button
                                 key={v}
                                 onClick={() => setView(v)}
@@ -312,13 +356,30 @@ const MenuFinder: React.FC = () => {
                             >
                                 {v === 'browse'
                                     ? '🍽️ Browse'
-                                    : `★ My Menu${favorites.length > 0 ? ` (${favorites.length})` : ''}`}
+                                    : v === 'mymenu'
+                                        ? `★ My Menu${favorites.length > 0 ? ` (${favorites.length})` : ''}`
+                                        : `🧮 Plate${selectedPlate.items.length > 0 ? ` (${selectedPlate.items.length})` : ''}`}
                             </button>
                         ))}
                     </div>
                 </div>
 
-                {view === 'mymenu' ? (
+                {view === 'plate' ? (
+                    <PlateView
+                        plate={selectedPlate}
+                        date={plateDate}
+                        meal={plateMeal}
+                        availableDates={plateDates}
+                        meals={MEALS}
+                        onSelect={(d, m) => setPlateSel({ date: d, meal: m })}
+                        setServings={(id, n) => setServings(plateDate, plateMeal, id, n)}
+                        removeItem={(id) => removeItem(plateDate, plateMeal, id)}
+                        clearPlate={() => clearPlate(plateDate, plateMeal)}
+                        syncError={syncError}
+                        signedIn={session !== null}
+                        authEnabled={authEnabled}
+                    />
+                ) : view === 'mymenu' ? (
                     <MyMenu
                         items={items}
                         favorites={favorites}
@@ -579,6 +640,28 @@ const MenuFinder: React.FC = () => {
                                                                                         >
                                                                                             📅
                                                                                         </button>
+                                                                                        {(() => {
+                                                                                            const rowId = entryId({
+                                                                                                item_key: item.item_key,
+                                                                                                hall: item.hall,
+                                                                                                station: item.station ?? '',
+                                                                                            });
+                                                                                            const onPlate = getPlate(item.date, item.meal)
+                                                                                                .items.find(e => entryId(e) === rowId);
+                                                                                            return (
+                                                                                                <button
+                                                                                                    onClick={() => addToPlate(item)}
+                                                                                                    className={`w-6 h-6 rounded-lg text-xs font-bold shrink-0 transition-colors tabular-nums ${
+                                                                                                        onPlate
+                                                                                                            ? 'bg-[#00274C] text-white dark:bg-[#003870]'
+                                                                                                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-slate-600'
+                                                                                                    }`}
+                                                                                                    title={onPlate ? `${onPlate.servings} on your plate — tap to add another` : 'Add to plate'}
+                                                                                                >
+                                                                                                    {onPlate ? onPlate.servings : '+'}
+                                                                                                </button>
+                                                                                            );
+                                                                                        })()}
                                                                                     </div>
                                                                                 );
                                                                             })}
