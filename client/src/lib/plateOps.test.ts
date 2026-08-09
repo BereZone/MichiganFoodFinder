@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     MIN_SERVINGS, MAX_SERVINGS, plateKey, entryId, emptyPlate, clampServings,
     addEntry, setEntryServings, removeEntry, clearPlateItems, mergePlateMaps,
+    decrementOrRemove,
 } from './plateOps';
 import type { Plate, PlateEntry, PlateMap } from '../types';
 
@@ -43,6 +44,10 @@ describe('clampServings', () => {
     it('passes valid values through', () => expect(clampServings(2.5)).toBe(2.5));
     it('falls back to the minimum for NaN', () => expect(clampServings(NaN)).toBe(MIN_SERVINGS));
     it('falls back to the minimum for Infinity', () => expect(clampServings(Infinity)).toBe(MAX_SERVINGS));
+    it('rounds away binary floating-point drift', () => {
+        // 2.3 - 0.5 is 1.7999999999999998 in IEEE 754.
+        expect(clampServings(2.3 - 0.5)).toBe(1.8);
+    });
 });
 
 describe('addEntry', () => {
@@ -150,5 +155,52 @@ describe('mergePlateMaps', () => {
 
     it('handles both sides being empty', () => {
         expect(mergePlateMaps({}, {})).toEqual({ merged: {}, toUpload: [] });
+    });
+});
+
+describe('decrementOrRemove', () => {
+    it('steps down by half a serving', () => {
+        const next = decrementOrRemove(plate([entry({ servings: 2 })]), entryId(entry()), T2);
+        expect(next.items[0].servings).toBe(1.5);
+        expect(next.updated_at).toBe(T2);
+    });
+
+    it('steps from 1 down to the minimum rather than removing', () => {
+        const next = decrementOrRemove(plate([entry({ servings: 1 })]), entryId(entry()), T2);
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0].servings).toBe(MIN_SERVINGS);
+    });
+
+    it('removes the entry when it is already at the minimum', () => {
+        const next = decrementOrRemove(plate([entry({ servings: MIN_SERVINGS })]), entryId(entry()), T2);
+        expect(next.items).toEqual([]);
+        expect(next.updated_at).toBe(T2);
+    });
+
+    it('leaves other entries alone when removing', () => {
+        const p = plate([entry({ servings: MIN_SERVINGS }), entry({ item_key: 'rice', servings: 2 })]);
+        const next = decrementOrRemove(p, entryId(entry()), T2);
+        expect(next.items.map(e => e.item_key)).toEqual(['rice']);
+    });
+
+    it('is a no-op for an unknown id but still restamps', () => {
+        const next = decrementOrRemove(plate([entry()]), 'nope|X|Y', T2);
+        expect(next.items).toHaveLength(1);
+        expect(next.updated_at).toBe(T2);
+    });
+
+    it('does not mutate the input plate', () => {
+        const original = plate([entry({ servings: MIN_SERVINGS })]);
+        decrementOrRemove(original, entryId(entry()), T2);
+        expect(original.items).toHaveLength(1);
+        expect(original.updated_at).toBe(T1);
+    });
+
+    it('keeps servings clean across repeated steps from a typed value', () => {
+        let p = plate([entry({ servings: 2.3 })]);
+        p = decrementOrRemove(p, entryId(entry()), T2);
+        expect(p.items[0].servings).toBe(1.8);
+        p = decrementOrRemove(p, entryId(entry()), T2);
+        expect(p.items[0].servings).toBe(1.3);
     });
 });

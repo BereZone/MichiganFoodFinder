@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Plate** view: add menu items to a per-meal plate, adjust servings in 0.5 steps, and see summed calories, protein, carbs, fat, and sodium. Items missing nutrition data are flagged and the totals are labelled a lower bound. Plates are saved on the device and sync to your account when signed in (run `supabase/plates.sql` — see `docs/auth-setup.md`).
+- Browse rows adjust the plate in place: once an item is on the plate its add button becomes a `− servings +` stepper, and stepping below half a serving removes the item.
 
 ## [1.1.0] - 2026-07-28
 

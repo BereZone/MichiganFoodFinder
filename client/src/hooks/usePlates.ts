@@ -3,8 +3,8 @@ import type { Session } from '@supabase/supabase-js';
 import type { Plate, PlateEntry, PlateMap } from '../types';
 import { supabase } from '../lib/supabase';
 import {
-    addEntry, clearPlateItems, emptyPlate, mergePlateMaps, plateKey,
-    removeEntry, setEntryServings,
+    addEntry, clearPlateItems, decrementOrRemove, emptyPlate, mergePlateMaps,
+    plateKey, removeEntry, setEntryServings,
 } from '../lib/plateOps';
 
 const LS_KEY = 'umich-dining-plates';
@@ -173,11 +173,22 @@ export function usePlates(session: Session | null) {
         [mutate],
     );
 
+    /** Step down one serving, removing the entry when it is already at the
+     *  minimum. Used by the Browse rows, which have no separate remove button. */
+    const decrementItem = useCallback(
+        (date: string, meal: string, id: string) =>
+            mutate(date, meal, (p, now) => decrementOrRemove(p, id, now)),
+        [mutate],
+    );
+
     const clearPlate = useCallback(
         (date: string, meal: string) =>
             mutate(date, meal, (p, now) => clearPlateItems(p, now)),
         [mutate],
     );
 
-    return { plates, getPlate, addItem, setServings, removeItem, clearPlate, syncError };
+    return {
+        plates, getPlate, addItem, setServings, removeItem, decrementItem,
+        clearPlate, syncError,
+    };
 }

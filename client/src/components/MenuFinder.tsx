@@ -7,7 +7,7 @@ import { inferDetroitNow } from '../lib/mealTime';
 import { usePlates } from '../hooks/usePlates';
 import PlateView from './PlateView';
 import { nutritionFromMenuItem } from '../lib/nutrition';
-import { entryId } from '../lib/plateOps';
+import { entryId, MIN_SERVINGS } from '../lib/plateOps';
 
 const DINING_HALLS = [
     'Bursley', 'East Quad', 'Markley', 'Mosher-Jordan',
@@ -83,7 +83,10 @@ const MenuFinder: React.FC = () => {
 
     const { session, signIn, signOut, enabled: authEnabled } = useAuth();
     const { favorites, toggleFavorite } = useFavorites(session);
-    const { plates, getPlate, addItem, setServings, removeItem, clearPlate, syncError } = usePlates(session);
+    const {
+        plates, getPlate, addItem, setServings, removeItem, decrementItem,
+        clearPlate, syncError,
+    } = usePlates(session);
     const today = useMemo(localToday, []);
 
     // Which plate the Plate tab is showing. Seeded once from whatever is
@@ -648,18 +651,46 @@ const MenuFinder: React.FC = () => {
                                                                                             });
                                                                                             const onPlate = getPlate(item.date, item.meal)
                                                                                                 .items.find(e => entryId(e) === rowId);
+                                                                                            const btn = 'w-6 h-6 rounded-lg text-xs font-bold shrink-0 transition-colors leading-none';
+                                                                                            const plain = 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-slate-600';
+
+                                                                                            if (!onPlate) {
+                                                                                                return (
+                                                                                                    <button
+                                                                                                        onClick={() => addToPlate(item)}
+                                                                                                        className={`${btn} ${plain}`}
+                                                                                                        title="Add to plate"
+                                                                                                    >
+                                                                                                        +
+                                                                                                    </button>
+                                                                                                );
+                                                                                            }
+
+                                                                                            // At the minimum there is no lower step, so the
+                                                                                            // control turns into an explicit remove.
+                                                                                            const atMin = onPlate.servings <= MIN_SERVINGS;
                                                                                             return (
-                                                                                                <button
-                                                                                                    onClick={() => addToPlate(item)}
-                                                                                                    className={`w-6 h-6 rounded-lg text-xs font-bold shrink-0 transition-colors tabular-nums ${
-                                                                                                        onPlate
-                                                                                                            ? 'bg-[#00274C] text-white dark:bg-[#003870]'
-                                                                                                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-slate-600'
-                                                                                                    }`}
-                                                                                                    title={onPlate ? `${onPlate.servings} on your plate — tap to add another` : 'Add to plate'}
-                                                                                                >
-                                                                                                    {onPlate ? onPlate.servings : '+'}
-                                                                                                </button>
+                                                                                                <div className="flex items-center gap-0.5 shrink-0">
+                                                                                                    <button
+                                                                                                        onClick={() => decrementItem(item.date, item.meal, rowId)}
+                                                                                                        className={`${btn} ${atMin
+                                                                                                            ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60'
+                                                                                                            : plain}`}
+                                                                                                        title={atMin ? 'Remove from plate' : 'Fewer servings'}
+                                                                                                    >
+                                                                                                        {atMin ? '×' : '−'}
+                                                                                                    </button>
+                                                                                                    <span className="w-6 text-center text-xs font-bold tabular-nums text-[#00274C] dark:text-blue-300">
+                                                                                                        {onPlate.servings}
+                                                                                                    </span>
+                                                                                                    <button
+                                                                                                        onClick={() => addToPlate(item)}
+                                                                                                        className={`${btn} bg-[#00274C] text-white hover:bg-[#003870] dark:bg-[#003870] dark:hover:bg-[#004a94]`}
+                                                                                                        title="More servings"
+                                                                                                    >
+                                                                                                        +
+                                                                                                    </button>
+                                                                                                </div>
                                                                                             );
                                                                                         })()}
                                                                                     </div>

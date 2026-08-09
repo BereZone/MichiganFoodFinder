@@ -25,7 +25,11 @@ export function emptyPlate(date: string, meal: string): Plate {
 
 export function clampServings(n: number): number {
     if (Number.isNaN(n)) return MIN_SERVINGS;
-    return Math.min(MAX_SERVINGS, Math.max(MIN_SERVINGS, n));
+    const clamped = Math.min(MAX_SERVINGS, Math.max(MIN_SERVINGS, n));
+    // Stepping by 0.5 from a typed value like 2.3 yields 1.7999999999999998 in
+    // IEEE 754. Every mutation routes through here, so rounding once keeps
+    // stored and displayed servings clean.
+    return Math.round(clamped * 100) / 100;
 }
 
 export function addEntry(plate: Plate, entry: PlateEntry, now: string): Plate {
@@ -48,6 +52,18 @@ export function setEntryServings(
 
 export function removeEntry(plate: Plate, id: string, now: string): Plate {
     return { ...plate, items: plate.items.filter((e) => entryId(e) !== id), updated_at: now };
+}
+
+/**
+ * One step down. At the minimum there is nowhere lower to go, so the entry is
+ * removed instead — this is the whole plate control in a Browse row, which has
+ * no separate remove button, so it must never dead-end.
+ */
+export function decrementOrRemove(plate: Plate, id: string, now: string): Plate {
+    const entry = plate.items.find((e) => entryId(e) === id);
+    if (!entry) return { ...plate, updated_at: now };
+    if (entry.servings <= MIN_SERVINGS) return removeEntry(plate, id, now);
+    return setEntryServings(plate, id, entry.servings - SERVING_STEP, now);
 }
 
 /**
