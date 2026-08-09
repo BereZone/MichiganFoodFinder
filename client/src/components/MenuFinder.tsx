@@ -3,6 +3,7 @@ import type { MenuItem } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useFavorites } from '../hooks/useFavorites';
 import MyMenu from './MyMenu';
+import { inferDetroitNow } from '../lib/mealTime';
 
 const DINING_HALLS = [
     'Bursley', 'East Quad', 'Markley', 'Mosher-Jordan',
@@ -216,29 +217,7 @@ const MenuFinder: React.FC = () => {
         setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
 
     const handleOpenNow = () => {
-        const now = new Date();
-        const parts = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'America/Detroit',
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
-        }).formatToParts(now);
-        const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
-        const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
-        const isWeekend = get('weekday') === 'Sun' || get('weekday') === 'Sat';
-        const time = parseInt(get('hour'), 10) + parseInt(get('minute'), 10) / 60;
-
-        let meal = '';
-        if (time < 10.5) {
-            meal = 'Breakfast';
-        } else if (time >= 16.5) {
-            meal = 'Dinner';
-        } else {
-            if (isWeekend) {
-                meal = time < 14.0 ? 'Lunch' : 'Dinner';
-            } else {
-                meal = 'Lunch';
-            }
-        }
+        const { date: dateStr, meal } = inferDetroitNow();
 
         setSelectedDate(uniqueDates.includes(dateStr) ? dateStr : (uniqueDates[0] || ''));
         setSelectedMeal(meal);
@@ -648,6 +627,15 @@ const MenuFinder: React.FC = () => {
                 <p className="text-xs text-gray-300 dark:text-slate-700">
                     Michigan Food Finder · Not affiliated with the University of Michigan
                 </p>
+                <a
+                    href="https://github.com/BereZone/MichiganFoodFinder/blob/main/CHANGELOG.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="View changelog"
+                    className="inline-block mt-2 px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-800 text-[10px] font-mono tabular-nums text-gray-300 dark:text-slate-700 hover:text-gray-500 dark:hover:text-slate-500 hover:border-gray-300 dark:hover:border-slate-700 transition-colors"
+                >
+                    v{__APP_VERSION__}
+                </a>
             </footer>
         </div>
     );
