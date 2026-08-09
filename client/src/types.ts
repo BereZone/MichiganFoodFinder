@@ -25,3 +25,29 @@ export interface MenuResponse {
     last_built: string;
     is_building: boolean;
 }
+
+export interface PlateNutrition {
+    calories: number | null;
+    fat_g: number | null;
+    carbs_g: number | null;
+    protein_g: number | null;
+    sodium_mg: number | null;
+}
+
+export interface PlateEntry {
+    item_key: string;
+    name: string;
+    hall: string;
+    station: string;
+    servings: number;
+    nutrition: PlateNutrition;
+}
+
+export interface Plate {
+    date: string;        // YYYY-MM-DD
+    meal: string;        // Breakfast | Brunch | Lunch | Dinner
+    items: PlateEntry[];
+    updated_at: string;  // ISO 8601, always via new Date(...).toISOString()
+}
+
+export type PlateMap = Record<string, Plate>;
