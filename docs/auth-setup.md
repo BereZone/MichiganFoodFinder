@@ -9,7 +9,10 @@ set, the sign-in button simply doesn't render.
 
 ## 1. Database table
 
-Run `supabase/user_favorites.sql` in the Supabase SQL Editor (once).
+Run these in the Supabase SQL Editor (once each, in order):
+
+1. `supabase/user_favorites.sql` — synced favorites.
+2. `supabase/plates.sql` — synced macro plates.
 
 ## 2. Google OAuth credentials (~10 min, one time)
 
@@ -58,3 +61,6 @@ VITE_SUPABASE_ANON_KEY=<anon key>
   localStorage so the last state survives signing out).
 - **My Menu** view: shows where and when your favorites appear in the next
   two weeks, soonest first — computed client-side from the loaded menu data.
+- **Plate** view: plates are stored per device in localStorage and, when
+  signed in, synced to the `plates` table — one row per (date, meal), with
+  the items as JSONB. Conflicts resolve last-write-wins per plate.
