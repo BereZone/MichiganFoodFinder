@@ -264,14 +264,20 @@ current plate's item count.
 The client has no JavaScript test runner today; CI runs Python unittest for
 the scraper and a `tsc` build for the client.
 
-Add **Vitest** covering `lib/nutrition.ts` only, wired into the existing
-`client` CI job:
+Add **Vitest** covering the pure `lib/` modules, wired into the existing
+`client` CI job. For `nutrition.ts`:
 
 - `parseAmount` against `"3g"`, `"480mg"`, `"0.5g"`, `null`, `""`, and
   unparseable text.
 - `scaleEntry` at 0.5x, 1x, and 2.5x, including null passthrough.
 - `totalPlate` summing across entries with nulls present, and its
   `incompleteCount`.
+
+`plateOps.ts` and `mealTime.ts` are covered the same way — mutation purity and
+serving clamps for the former, and fixed-instant date/meal inference across
+both EST and EDT for the latter. The merge function gets explicit
+resurrection cases, since that is the behavior the storage shape exists to
+guarantee.
 
 Component and DOM tests are deliberately excluded: they require jsdom and
 testing-library, a large dependency footprint for UI that `tsc` already
