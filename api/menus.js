@@ -40,7 +40,7 @@ async function fetchAllOfferings(startDate, endDate) {
             .from('offerings')
             .select(
                 'date, hall, meal, station, nutrient_density, carbon_footprint, tags, ' +
-                'calories, total_fat, total_carbohydrate, protein, sodium, scraped_at, ' +
+                'calories, serving_size, total_fat, total_carbohydrate, protein, sodium, scraped_at, ' +
                 'items ( name, item_key )'
             )
             .gte('date', startDate)
@@ -86,6 +86,7 @@ function toLegacyShape(rows, startDate, endDate) {
             other_tags_str: otherTags.join(','),
             nutrition: {
                 calories: row.calories,
+                serving_size: row.serving_size ?? null,
                 total_fat: row.total_fat,
                 total_carbohydrate: row.total_carbohydrate,
                 protein: row.protein,

@@ -10,6 +10,7 @@ export interface MenuItem {
     other_tags_str: string;
     nutrition: {
         calories: number | null;
+        serving_size: string | null;
         total_fat: string | null;
         total_carbohydrate: string | null;
         protein: string | null;
@@ -40,6 +41,10 @@ export interface PlateEntry {
     hall: string;
     station: string;
     servings: number;
+    /** As published, e.g. "1/2 Cup (113g)". Optional because plates saved
+     *  before this field existed have no such key, and because the menu does
+     *  not publish a serving size for every item. */
+    serving_size?: string | null;
     nutrition: PlateNutrition;
 }
 

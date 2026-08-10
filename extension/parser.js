@@ -55,12 +55,18 @@ function parseTags(text) {
 }
 
 function parseNutrition(el) {
-    const nut = { calories: null, total_fat: null, total_carbohydrate: null, protein: null, sodium: null };
+    const nut = { calories: null, serving_size: null, total_fat: null, total_carbohydrate: null, protein: null, sodium: null };
     if (!el) return nut;
     const calTr = el.querySelector('tr.portion-calories');
     if (calTr) {
         const m = norm(calTr.textContent).match(/Calories\s+(\d+)/i);
         if (m) nut.calories = parseInt(m[1], 10);
+    }
+    // Opaque display text, e.g. "1/2 Cup (113g)" — see scrape_menus.py.
+    const sizeTr = el.querySelector('tr.serving-size');
+    if (sizeTr) {
+        const m = norm(sizeTr.textContent).match(/Serving\s*Size\s*(.+)/i);
+        if (m && m[1].trim()) nut.serving_size = m[1].trim();
     }
     const findVal = (labelRx) => {
         for (const td of el.querySelectorAll('td')) {

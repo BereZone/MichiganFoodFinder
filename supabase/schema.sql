@@ -24,6 +24,7 @@ create table if not exists public.offerings (
     carbon_footprint   text not null default '',   -- '', Low, Medium, High
     tags               text[] not null default '{}',  -- Vegan, Halal, Gluten Free, ...
     calories           integer,
+    serving_size       text,          -- as published, e.g. '1/2 Cup (113g)'
     total_fat          text,
     total_carbohydrate text,
     protein            text,
@@ -31,6 +32,10 @@ create table if not exists public.offerings (
     scraped_at         timestamptz not null default now(),
     unique (date, hall, meal, station, item_id)
 );
+
+-- Added 2026-08-09 for the plate serving-size display. Separate from the
+-- create table above so existing databases pick it up on a re-run.
+alter table public.offerings add column if not exists serving_size text;
 
 create index if not exists offerings_date_idx    on public.offerings (date);
 create index if not exists offerings_item_id_idx on public.offerings (item_id);

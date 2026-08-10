@@ -75,3 +75,40 @@ export function totalPlate(items: PlateEntry[]): PlateTotals {
 export function roundGrams(n: number): number {
     return Math.round(n * 10) / 10;
 }
+
+export interface ServingDisplay {
+    /** The serving size exactly as the menu publishes it. */
+    label: string;
+    /** What the chosen number of servings comes to, or null at exactly one. */
+    scaled: string | null;
+}
+
+/**
+ * Grams from the parenthesised suffix of a published serving size, e.g.
+ * "1/2 Cup (113g)" -> 113. Null when the site omits it ("Each").
+ */
+export function parseServingGrams(servingSize: string | null | undefined): number | null {
+    if (!servingSize) return null;
+    const match = /\((\d+(?:\.\d+)?)\s*g\)/i.exec(servingSize);
+    if (!match) return null;
+    const n = Number(match[1]);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * How much to actually put on the tray. The label is passed through untouched —
+ * the site's serving text is inconsistent and occasionally misspelled, so it is
+ * treated as opaque display text rather than parsed for meaning.
+ */
+export function describeServing(
+    servingSize: string | null | undefined, servings: number,
+): ServingDisplay | null {
+    if (!servingSize) return null;
+    if (servings === 1) return { label: servingSize, scaled: null };
+
+    const grams = parseServingGrams(servingSize);
+    return {
+        label: servingSize,
+        scaled: grams != null ? `${Math.round(grams * servings)} g` : `${servings}×`,
+    };
+}

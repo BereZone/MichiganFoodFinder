@@ -140,6 +140,7 @@ def parse_nutrition_from_li(li) -> dict:
     """
     nut = {
         "calories": None,
+        "serving_size": None,
         "total_fat": None,
         "total_carbohydrate": None,
         "protein": None,
@@ -157,6 +158,16 @@ def parse_nutrition_from_li(li) -> dict:
         m = re.search(r"Calories\s+(\d+)", txt, re.I)
         if m:
             nut["calories"] = int(m.group(1))
+
+    # Serving size: <tr class="serving-size"><td><strong>Serving Size</strong> 1/2 Cup (113g)</td></tr>
+    # Kept as opaque display text — the site publishes it inconsistently
+    # ("Ounce (28g)", "Slice (105g)", and typos such as "1 oz Seving (28g)").
+    size_tr = li.find("tr", class_="serving-size")
+    if size_tr:
+        txt = normalize_spaces(size_tr.get_text())
+        m = re.search(r"Serving\s*Size\s*(.+)", txt, re.I)
+        if m and m.group(1).strip():
+            nut["serving_size"] = m.group(1).strip()
 
     # For others, we iterate rows or look for specific text
     # The structure is usually <tr><td><strong>Label</strong> Value</td>...</tr>
@@ -391,8 +402,8 @@ def push_to_database(db_url: str, rows: list):
                 offerings[conflict_key] = (
                     item_id, r["date"], r["hall"], r["meal"], station,
                     r["nutrient_density"], r["carbon_footprint"], r["other_tags"],
-                    n["calories"], n["total_fat"], n["total_carbohydrate"],
-                    n["protein"], n["sodium"],
+                    n["calories"], n["serving_size"], n["total_fat"],
+                    n["total_carbohydrate"], n["protein"], n["sodium"],
                 )
 
             offering_rows = execute_values(
@@ -400,13 +411,14 @@ def push_to_database(db_url: str, rows: list):
                 """
                 insert into offerings (item_id, date, hall, meal, station,
                     nutrient_density, carbon_footprint, tags, calories,
-                    total_fat, total_carbohydrate, protein, sodium)
+                    serving_size, total_fat, total_carbohydrate, protein, sodium)
                 values %s
                 on conflict (date, hall, meal, station, item_id) do update set
                     nutrient_density = excluded.nutrient_density,
                     carbon_footprint = excluded.carbon_footprint,
                     tags = excluded.tags,
                     calories = excluded.calories,
+                    serving_size = excluded.serving_size,
                     total_fat = excluded.total_fat,
                     total_carbohydrate = excluded.total_carbohydrate,
                     protein = excluded.protein,

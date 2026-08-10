@@ -67,6 +67,7 @@ class TestNutritionParsing(unittest.TestCase):
     <li>
       <div class="item-name">Grilled Chicken</div>
       <table>
+        <tr class="serving-size"><td><strong>Serving Size</strong> 1/2 Cup (113g)</td></tr>
         <tr class="portion-calories"><td>Calories 164</td></tr>
         <tr><td><strong>Total Fat</strong> 3g</td></tr>
         <tr><td><strong>Total Carbohydrate</strong> 20g</td></tr>
@@ -80,10 +81,20 @@ class TestNutritionParsing(unittest.TestCase):
         li = BeautifulSoup(self.LI_HTML, "html.parser").find("li")
         nut = parse_nutrition_from_li(li)
         self.assertEqual(nut["calories"], 164)
+        self.assertEqual(nut["serving_size"], "1/2 Cup (113g)")
         self.assertEqual(nut["total_fat"], "3g")
         self.assertEqual(nut["total_carbohydrate"], "20g")
         self.assertEqual(nut["protein"], "12g")
         self.assertEqual(nut["sodium"], "300mg")
+
+    def test_serving_size_absent_stays_none(self):
+        html = """
+        <li><div class="item-name">Mystery</div>
+          <table><tr class="portion-calories"><td>Calories 10</td></tr></table>
+        </li>
+        """
+        li = BeautifulSoup(html, "html.parser").find("li")
+        self.assertIsNone(parse_nutrition_from_li(li)["serving_size"])
 
     def test_missing_li_returns_nones(self):
         nut = parse_nutrition_from_li(None)
@@ -91,6 +102,7 @@ class TestNutritionParsing(unittest.TestCase):
             nut,
             {
                 "calories": None,
+                "serving_size": None,
                 "total_fat": None,
                 "total_carbohydrate": None,
                 "protein": None,
@@ -118,12 +130,20 @@ class TestRealPageFixture(unittest.TestCase):
         oat = next(r for r in self.rows if r["item_display"] == "Oatmeal")
         self.assertEqual(oat["nutrition"]["calories"], 183)
         self.assertEqual(oat["nutrition"]["protein"], "6g")
+        self.assertEqual(oat["nutrition"]["serving_size"], "Cups (253g)")
         self.assertEqual(oat["carbon_footprint"], "Low")
         self.assertIn("Vegan", oat["other_tags"])
 
     def test_nutrition_coverage(self):
         with_cal = sum(1 for r in self.rows if r["nutrition"]["calories"] is not None)
         self.assertGreater(with_cal / len(self.rows), 0.9)
+
+    def test_serving_size_coverage(self):
+        sizes = [r["nutrition"]["serving_size"] for r in self.rows]
+        present = [s for s in sizes if s]
+        self.assertGreater(len(present) / len(sizes), 0.9)
+        # Kept verbatim, including the unit text the gram figure sits in.
+        self.assertIn("1/2 Cup (113g)", present)
 
 
 if __name__ == "__main__":

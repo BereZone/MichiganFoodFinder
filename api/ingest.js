@@ -101,6 +101,7 @@ module.exports = async (req, res) => {
                 carbon_footprint: r.carbon_footprint || '',
                 tags: Array.isArray(r.other_tags) ? r.other_tags : [],
                 calories: Number.isInteger(n.calories) ? n.calories : null,
+                serving_size: n.serving_size ?? null,
                 total_fat: n.total_fat ?? null,
                 total_carbohydrate: n.total_carbohydrate ?? null,
                 protein: n.protein ?? null,

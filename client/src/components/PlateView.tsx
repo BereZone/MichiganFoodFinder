@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Plate } from '../types';
-import { isIncomplete, roundGrams, totalPlate } from '../lib/nutrition';
+import { describeServing, isIncomplete, roundGrams, totalPlate } from '../lib/nutrition';
 import { clampServings, entryId, MIN_SERVINGS, SERVING_STEP } from '../lib/plateOps';
 
 interface Props {
@@ -112,6 +112,7 @@ const PlateView: React.FC<Props> = ({
                             {plate.items.map(item => {
                                 const id = entryId(item);
                                 const cals = item.nutrition.calories;
+                                const serving = describeServing(item.serving_size, item.servings);
                                 return (
                                     <li key={id} className="px-4 py-3 flex items-center gap-3">
                                         <div className="flex-1 min-w-0">
@@ -126,6 +127,20 @@ const PlateView: React.FC<Props> = ({
                                                     </span>
                                                 )}
                                             </p>
+                                            {serving && (
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                                                    <span className="text-gray-400 dark:text-gray-500">Serving:</span>{' '}
+                                                    {serving.label}
+                                                    {serving.scaled && (
+                                                        <>
+                                                            {' '}<span className="text-gray-300 dark:text-slate-600">→</span>{' '}
+                                                            <span className="font-semibold text-gray-700 dark:text-gray-200 tabular-nums">
+                                                                {serving.scaled}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </p>
+                                            )}
                                         </div>
 
                                         {/* Servings stepper */}

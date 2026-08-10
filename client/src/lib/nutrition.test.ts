@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     parseAmount, nutritionFromMenuItem, scaleNutrition,
-    isIncomplete, totalPlate, roundGrams,
+    isIncomplete, totalPlate, roundGrams, parseServingGrams, describeServing,
 } from './nutrition';
 import type { MenuItem, PlateEntry, PlateNutrition } from '../types';
 
@@ -121,4 +121,51 @@ describe('totalPlate', () => {
 describe('roundGrams', () => {
     it('rounds to one decimal place', () => expect(roundGrams(12.34)).toBe(12.3));
     it('rounds halves up', () => expect(roundGrams(0.25)).toBe(0.3));
+});
+
+describe('parseServingGrams', () => {
+    it('pulls grams out of the parenthesised suffix', () => {
+        expect(parseServingGrams('1/2 Cup (113g)')).toBe(113);
+        expect(parseServingGrams('8 oz Cup (227g)')).toBe(227);
+        expect(parseServingGrams('Ounce (28g)')).toBe(28);
+    });
+    it('tolerates a space before the unit', () => {
+        expect(parseServingGrams('Slice (105 g)')).toBe(105);
+    });
+    it('returns null when the serving has no gram figure', () => {
+        expect(parseServingGrams('Each')).toBeNull();
+        expect(parseServingGrams('')).toBeNull();
+        expect(parseServingGrams(null)).toBeNull();
+    });
+    it('survives the typos the site publishes', () => {
+        expect(parseServingGrams('1 oz Seving (28g)')).toBe(28);
+    });
+});
+
+describe('describeServing', () => {
+    it('is null when the item has no published serving size', () => {
+        expect(describeServing(null, 2)).toBeNull();
+        expect(describeServing('', 2)).toBeNull();
+    });
+
+    it('shows only the label at exactly one serving', () => {
+        expect(describeServing('1/2 Cup (113g)', 1))
+            .toEqual({ label: '1/2 Cup (113g)', scaled: null });
+    });
+
+    it('scales the grams for other serving counts', () => {
+        expect(describeServing('1/2 Cup (113g)', 2))
+            .toEqual({ label: '1/2 Cup (113g)', scaled: '226 g' });
+        expect(describeServing('1/2 Cup (113g)', 0.5))
+            .toEqual({ label: '1/2 Cup (113g)', scaled: '57 g' });
+    });
+
+    it('rounds scaled grams to whole numbers', () => {
+        expect(describeServing('1/2 Cup (113g)', 2.5))
+            .toEqual({ label: '1/2 Cup (113g)', scaled: '283 g' });
+    });
+
+    it('falls back to a plain multiplier when grams are unavailable', () => {
+        expect(describeServing('Each', 2)).toEqual({ label: 'Each', scaled: '2×' });
+    });
 });

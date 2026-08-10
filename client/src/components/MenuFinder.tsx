@@ -267,6 +267,7 @@ const MenuFinder: React.FC = () => {
             hall: item.hall,
             station: item.station ?? '',
             servings: 1,
+            serving_size: item.nutrition?.serving_size ?? null,
             nutrition: nutritionFromMenuItem(item),
         });
         setPlateSel({ date: item.date, meal: item.meal });
@@ -626,6 +627,11 @@ const MenuFinder: React.FC = () => {
                                                                                                 </span>
                                                                                                 <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-40 bg-gray-900 dark:bg-slate-700 text-white text-xs rounded-xl p-2.5 z-10 shadow-xl pointer-events-none">
                                                                                                     <div className="space-y-1">
+                                                                                                        {item.nutrition.serving_size && (
+                                                                                                            <div className="pb-1 mb-1 border-b border-white/15 text-gray-300">
+                                                                                                                {item.nutrition.serving_size}
+                                                                                                            </div>
+                                                                                                        )}
                                                                                                         {item.nutrition.total_fat && <div className="flex justify-between"><span className="text-gray-400">Fat</span><span>{item.nutrition.total_fat}</span></div>}
                                                                                                         {item.nutrition.total_carbohydrate && <div className="flex justify-between"><span className="text-gray-400">Carbs</span><span>{item.nutrition.total_carbohydrate}</span></div>}
                                                                                                         {item.nutrition.protein && <div className="flex justify-between"><span className="text-gray-400">Protein</span><span>{item.nutrition.protein}</span></div>}
