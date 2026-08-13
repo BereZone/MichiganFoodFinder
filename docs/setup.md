@@ -32,11 +32,15 @@ In the Vercel project: Settings, Environment Variables. Add (values from Supabas
 
 Redeploy so the serverless function picks them up.
 
-## 6. First scrape
+## 6. Custom domain
+
+The site is served from `umichfoodfinder.berezone.com`. In the Vercel project: Settings, Domains, add the subdomain, then add the CNAME record it shows at the `berezone.com` DNS provider. Once the domain is live, update the Supabase **Site URL** (see [auth-setup.md](auth-setup.md)) and the extension's ingest URL (see [browser-relay.md](browser-relay.md)) to match, or Google sign-in redirects and menu syncs keep pointing at the old `.vercel.app` host.
+
+## 7. First scrape
 
 In GitHub: Actions, select the **Scrape Menus** workflow, click **Run workflow**. It otherwise runs on a 6-hour schedule.
 
-## 7. Verify
+## 8. Verify
 
 - Supabase Table Editor: `items` and `offerings` have rows.
 - The live site loads menus (i.e. `/api/menus` returns data).

@@ -32,7 +32,7 @@ Run these in the Supabase SQL Editor (once each, in order):
 1. **Authentication → Sign In / Providers → Google**: enable, paste the
    Client ID and Client secret, save.
 2. **Authentication → URL Configuration**:
-   - Site URL: `https://<your-site>.vercel.app`
+   - Site URL: `https://umichfoodfinder.berezone.com`
    - Additional redirect URLs: `http://localhost:5173` (for local dev)
 
 ## 4. Vercel env vars (build-time, then redeploy)

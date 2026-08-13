@@ -31,7 +31,7 @@ add two more in Vercel → Settings → Environment Variables, then redeploy:
 1. Open `chrome://extensions`, enable **Developer mode** (top right).
 2. Click **Load unpacked** and select the `extension/` folder of this repo.
 3. Click the extension's icon (pin it for convenience) and fill in:
-   - **Ingest URL**: `https://<your-site>.vercel.app/api/ingest`
+   - **Ingest URL**: `https://umichfoodfinder.berezone.com/api/ingest`
    - **Ingest token**: the same value you set as `INGEST_TOKEN`.
 4. Click **Sync now**. The popup shows progress per day and a green summary
    like `Synced 6800 rows across 15 day(s)` when finished.

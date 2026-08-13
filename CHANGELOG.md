@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Serving sizes are now captured from the menu (e.g. `1/2 Cup (113g)`) and shown on the Plate screen, scaled to the chosen number of servings, so you know how much to actually take. Requires re-running `supabase/schema.sql` for the new `offerings.serving_size` column, and a fresh menu sync to populate it.
 - Browse rows adjust the plate in place: once an item is on the plate its add button becomes a `− servings +` stepper, and stepping below half a serving removes the item.
 
+### Changed
+
+- The site now lives at https://umichfoodfinder.berezone.com. Docs, the extension's ingest-URL placeholder, and the Supabase sign-in redirect all point at the new domain; existing extension installs need their ingest URL updated in the popup.
+
 ## [1.1.0] - 2026-07-28
 
 ### Added

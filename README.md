@@ -4,7 +4,7 @@
 
 Michigan Food Finder shows University of Michigan dining hall menus in one place. A scheduled scraper pulls menus (with nutrition info and dietary tags) from dining.umich.edu into a Postgres database, and a React web app lets you browse and search what's being served across every hall.
 
-**Live site:** https://michigan-food-finder.vercel.app
+**Live site:** https://umichfoodfinder.berezone.com
 
 ## Architecture
 
