@@ -13,6 +13,16 @@ const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
 const DAYS_AHEAD = 14;
 const PAGE_SIZE = 1000; // Supabase caps responses at 1000 rows by default
 
+// This endpoint is public and uncredentialed, so the only abuse worth guarding
+// is cost: every cache miss is a full 14-day pull out of Supabase. The edge
+// cache (Cache-Control below) absorbs repeat traffic on the canonical URL, and
+// the two guards in the handler stop the cheap ways to bypass it.
+const ALLOWED_METHODS = 'GET, HEAD, OPTIONS';
+const MEMO_TTL_MS = 5 * 60 * 1000;
+
+let memo = null;     // { date, at, payload } — survives across warm invocations
+let inFlight = null; // shared promise so concurrent misses make one DB call
+
 // Today's date (YYYY-MM-DD) in America/Detroit, regardless of server timezone.
 function getDetroitToday() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Detroit' });
@@ -58,6 +68,32 @@ async function fetchAllOfferings(startDate, endDate) {
     }
 
     return rows;
+}
+
+// Build the payload, reusing a recent one if this instance already has it.
+// Bounds Supabase reads to ~1 per instance per TTL no matter the request rate.
+async function getPayload() {
+    const startDate = getDetroitToday();
+    const now = Date.now();
+
+    if (memo && memo.date === startDate && now - memo.at < MEMO_TTL_MS) {
+        return memo.payload;
+    }
+    if (inFlight) return inFlight;
+
+    inFlight = (async () => {
+        const endDate = addDays(startDate, DAYS_AHEAD);
+        const rows = await fetchAllOfferings(startDate, endDate);
+        const payload = toLegacyShape(rows, startDate, endDate);
+        memo = { date: startDate, at: Date.now(), payload };
+        return payload;
+    })();
+
+    try {
+        return await inFlight;
+    } finally {
+        inFlight = null;
+    }
 }
 
 function toLegacyShape(rows, startDate, endDate) {
@@ -106,17 +142,34 @@ function toLegacyShape(rows, startDate, endDate) {
 }
 
 module.exports = async (req, res) => {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', true);
+    // Public read-only data: any origin may read it, but no credentials are
+    // involved. (Allow-Credentials with Origin '*' is rejected by browsers
+    // anyway, so claiming it only misleads.)
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
+    res.setHeader('Access-Control-Allow-Methods', ALLOWED_METHODS);
+    res.setHeader('Access-Control-Allow-Headers', 'Accept, Content-Type');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();
+        return;
+    }
+
+    // Reads only. Without this, POST bypasses the CDN entirely (Vercel never
+    // caches POST), so each one would be a guaranteed miss and a full DB pull.
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.setHeader('Allow', ALLOWED_METHODS);
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+    }
+
+    // The CDN caches per full URL, so '?anything' is a free cache-buster.
+    // Nothing legitimate sends a query string here, so send those back to the
+    // canonical URL instead of serving them; the redirect itself is cacheable,
+    // and 308 keeps the method intact.
+    if ((req.url || '').includes('?')) {
+        res.setHeader('Cache-Control', 'public, s-maxage=86400');
+        res.setHeader('Location', '/api/menus');
+        res.status(308).end();
         return;
     }
 
@@ -126,16 +179,17 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const startDate = getDetroitToday();
-        const endDate = addDays(startDate, DAYS_AHEAD);
-
-        const rows = await fetchAllOfferings(startDate, endDate);
-        const payload = toLegacyShape(rows, startDate, endDate);
+        const payload = await getPayload();
 
         // Set Vercel CDN Cache Control
         // s-maxage=3600: Cache on Vercel's Edge Network for 1 hour
         // stale-while-revalidate=600: Serve stale content for up to 10 mins while fetching new data in background
         res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=600');
+
+        if (req.method === 'HEAD') {
+            res.status(200).end();
+            return;
+        }
 
         res.status(200).json(payload);
     } catch (error) {

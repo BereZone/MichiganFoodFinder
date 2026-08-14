@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { timingSafeEqual } = require('crypto');
 
 // Ingest endpoint for the browser-relay extension (see docs/browser-relay.md).
 // Auth: shared secret in the x-ingest-token header (INGEST_TOKEN env var).
@@ -14,6 +15,18 @@ const supabase = SUPABASE_URL && SERVICE_ROLE_KEY
 
 const MAX_ROWS = 20000;
 const CHUNK = 500;
+const MAX_BODY_BYTES = 4 * 1024 * 1024; // reject oversized payloads on the header, before parsing
+
+// Constant-time compare so a wrong token leaks nothing through response timing.
+// Lengths are compared first (timingSafeEqual throws on a length mismatch),
+// which only reveals the token's length, not its contents.
+function tokenMatches(supplied) {
+    if (typeof supplied !== 'string') return false;
+    const a = Buffer.from(supplied);
+    const b = Buffer.from(INGEST_TOKEN);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+}
 
 function todayInDetroit() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Detroit' });
@@ -51,7 +64,12 @@ module.exports = async (req, res) => {
         res.status(500).json({ error: 'Ingest env vars not configured (INGEST_TOKEN / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
         return;
     }
-    if (req.headers['x-ingest-token'] !== INGEST_TOKEN) {
+    const declaredLength = Number(req.headers['content-length']);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+        res.status(413).json({ error: 'Payload too large — send one day per request' });
+        return;
+    }
+    if (!tokenMatches(req.headers['x-ingest-token'])) {
         res.status(401).json({ error: 'Invalid ingest token' });
         return;
     }

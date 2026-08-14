@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The site now lives at https://umichfoodfinder.berezone.com. Docs, the extension's ingest-URL placeholder, and the Supabase sign-in redirect all point at the new domain; existing extension installs need their ingest URL updated in the popup.
 
+### Security
+
+- `/api/menus` now refuses non-read methods (405) and redirects any query string back to the canonical URL (308). Both were free ways to bypass the CDN cache — Vercel never caches `POST`, and the cache key includes the query string — so each such request cost a full 14-day read out of Supabase.
+- `/api/menus` memoizes its payload in the function instance for 5 minutes and shares one in-flight database read across concurrent requests, so a traffic burst costs one query rather than one per request.
+- `/api/ingest` compares the ingest token in constant time and rejects payloads whose `Content-Length` exceeds 4 MB before parsing them.
+- Dropped the meaningless `Access-Control-Allow-Credentials: true` from `/api/menus` (browsers reject it alongside `Origin: *`) and narrowed the advertised methods to `GET, HEAD, OPTIONS`.
+
 ## [1.1.0] - 2026-07-28
 
 ### Added

@@ -3,7 +3,8 @@
     "version": "1.1.0",
     "scripts": {
         "build": "cd client && npm install && npm run build",
-        "dev": "node local-server.js"
+        "dev": "node local-server.js",
+        "test": "node --test tests/api-guards.test.mjs"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2",

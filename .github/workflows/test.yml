@@ -47,6 +47,12 @@ jobs:
           node --check extension/popup.js
           node -e "JSON.parse(require('fs').readFileSync('extension/manifest.json'))"
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: API guard tests
+        run: npm test
+
   client:
     name: Client build
     runs-on: ubuntu-latest
