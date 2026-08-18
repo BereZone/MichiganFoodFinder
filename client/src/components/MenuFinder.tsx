@@ -27,14 +27,15 @@ const DATES_PER_PAGE = 3;
  *  stays neutral so the row does not turn back into a rainbow. */
 const DIET_TAGS = new Set(['Vegan', 'Vegetarian']);
 
-/** At most three marks per row, diet first. Beyond that the chips out-shout
- *  the item name, which is what people are actually scanning for. */
+/** Every attribute the menu publishes: dietary tags first (those are what
+ *  people filter their whole diet on), then the rest, then nutrient density
+ *  and carbon footprint. Nothing is truncated away. */
 function marksFor(item: MenuItem): Array<{ text: string; diet: boolean }> {
     const diet = item.other_tags.filter(t => DIET_TAGS.has(t)).map(t => ({ text: t, diet: true }));
     const rest = item.other_tags.filter(t => !DIET_TAGS.has(t)).map(t => ({ text: t, diet: false }));
     if (item.nutrient_density) rest.push({ text: `ND ${item.nutrient_density}`, diet: false });
     if (item.carbon_footprint) rest.push({ text: `CF ${item.carbon_footprint}`, diet: false });
-    return [...diet, ...rest].slice(0, 3);
+    return [...diet, ...rest];
 }
 
 function formatLongDate(dateStr: string): string {
@@ -761,12 +762,12 @@ const MenuFinder: React.FC = () => {
                                                                                                     <StarIcon size={16} filled={isFav} />
                                                                                                 </button>
 
-                                                                                                <span className="flex-1 min-w-0 flex items-center gap-2">
-                                                                                                <span className="text-sm font-medium min-w-0 truncate">
+                                                                                                <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                                                                <span className="text-sm font-medium max-w-full">
                                                                                                     {item.item_display}
                                                                                                 </span>
 
-                                                                                                <span className="hidden md:flex items-center gap-1 shrink-0">
+                                                                                                <span className="flex flex-wrap items-center gap-1">
                                                                                                     {marksFor(item).map(({ text, diet }) => (
                                                                                                         <span
                                                                                                             key={text}
