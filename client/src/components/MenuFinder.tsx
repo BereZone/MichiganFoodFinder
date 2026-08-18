@@ -8,6 +8,12 @@ import { usePlates } from '../hooks/usePlates';
 import PlateView from './PlateView';
 import { nutritionFromMenuItem } from '../lib/nutrition';
 import { entryId, MIN_SERVINGS } from '../lib/plateOps';
+import { mealHeadline, freshness, MEAL_CHIP } from '../lib/boardVoice';
+import {
+    SearchIcon, CalendarIcon, StarIcon, PlusIcon, MinusIcon, CloseIcon,
+    SunIcon, MoonIcon, ClockIcon, ChevronDownIcon, ArrowLeftIcon,
+    ArrowRightIcon, TrayIcon, GoogleIcon, AlertIcon,
+} from './Icon';
 
 const DINING_HALLS = [
     'Bursley', 'East Quad', 'Markley', 'Mosher-Jordan',
@@ -17,12 +23,19 @@ const DINING_HALLS = [
 const MEALS = ['Breakfast', 'Brunch', 'Lunch', 'Dinner'];
 const DATES_PER_PAGE = 3;
 
-const MEAL_COLORS: Record<string, string> = {
-    Breakfast: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-    Brunch:    'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
-    Lunch:     'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-    Dinner:    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
-};
+/** Tags worth spotting at a glance get the one semantic green; everything else
+ *  stays neutral so the row does not turn back into a rainbow. */
+const DIET_TAGS = new Set(['Vegan', 'Vegetarian']);
+
+/** At most three marks per row, diet first. Beyond that the chips out-shout
+ *  the item name, which is what people are actually scanning for. */
+function marksFor(item: MenuItem): Array<{ text: string; diet: boolean }> {
+    const diet = item.other_tags.filter(t => DIET_TAGS.has(t)).map(t => ({ text: t, diet: true }));
+    const rest = item.other_tags.filter(t => !DIET_TAGS.has(t)).map(t => ({ text: t, diet: false }));
+    if (item.nutrient_density) rest.push({ text: `ND ${item.nutrient_density}`, diet: false });
+    if (item.carbon_footprint) rest.push({ text: `CF ${item.carbon_footprint}`, diet: false });
+    return [...diet, ...rest].slice(0, 3);
+}
 
 function formatLongDate(dateStr: string): string {
     const d = new Date(`${dateStr}T12:00:00`);
@@ -39,17 +52,32 @@ function localToday(): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const SkeletonGroup = () => (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden animate-pulse mb-3">
-        <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-700/40 border-b border-gray-100 dark:border-slate-700/50">
-            <div className="h-5 w-16 bg-gray-200 dark:bg-slate-600 rounded-md" />
-            <div className="h-4 w-28 bg-gray-200 dark:bg-slate-600 rounded" />
+/* ── Surface vocabulary ────────────────────────────────────── */
+
+const PANEL = 'bg-surface border border-line rounded-xl shadow-panel';
+
+const FIELD =
+    'w-full bg-surface border border-line rounded-lg px-3 py-2 text-sm text-fg ' +
+    'placeholder:text-fg-3 focus:border-navy-ink focus:ring-2 focus:ring-navy-ink/20 ' +
+    'focus:outline-none transition-colors';
+
+const CHIP = 'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors';
+const CHIP_OFF = 'bg-surface border-line text-fg-2 hover:border-line-2 hover:text-fg';
+const CHIP_ON = 'bg-navy border-navy text-on-navy';
+
+const SkeletonCard = () => (
+    <div className={`${PANEL} overflow-hidden mb-4 animate-pulse`}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-line">
+            <div className="h-5 w-20 bg-surface-3 rounded-md" />
+            <div className="h-4 w-28 bg-surface-2 rounded" />
         </div>
-        {[1, 2, 3, 4].map(i => (
-            <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 dark:border-slate-700/30 last:border-0">
-                <div className="h-4 w-4 bg-gray-200 dark:bg-slate-700 rounded shrink-0" />
-                <div className="h-4 bg-gray-100 dark:bg-slate-700/60 rounded flex-1" />
-                <div className="h-3 w-12 bg-gray-100 dark:bg-slate-700/60 rounded shrink-0" />
+        <div className="h-8 bg-surface-2 border-b border-line" />
+        {[1, 2, 3].map(i => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0">
+                <div className="h-4 w-4 bg-surface-3 rounded shrink-0" />
+                <div className="h-3.5 bg-surface-2 rounded" style={{ width: `${34 + i * 12}%` }} />
+                <div className="flex-1" />
+                <div className="h-3 w-12 bg-surface-2 rounded shrink-0" />
             </div>
         ))}
     </div>
@@ -72,6 +100,11 @@ const MenuFinder: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [view, setView] = useState<'browse' | 'mymenu' | 'plate'>('browse');
 
+    // Bumped only when results are deliberately reset (first load and
+    // "on right now"), so the settle animation stays a moment.
+    const [settleKey, setSettleKey] = useState(0);
+    const [poppedStar, setPoppedStar] = useState<string | null>(null);
+
     const [darkMode, setDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('umich-dining-theme');
@@ -88,6 +121,7 @@ const MenuFinder: React.FC = () => {
         clearPlate, syncError,
     } = usePlates(session);
     const today = useMemo(localToday, []);
+    const headline = useMemo(() => mealHeadline(), []);
 
     // Which plate the Plate tab is showing. Seeded once from whatever is
     // already in localStorage: the most recently modified non-empty plate,
@@ -131,6 +165,7 @@ const MenuFinder: React.FC = () => {
                 setItems(sortedMenus);
                 setLastUpdated(data.last_updated);
                 setDateRange(data.date_range);
+                setSettleKey(k => k + 1);
             } catch (err) {
                 console.error('Error loading menus:', err);
                 setError('Failed to load menu data. Please try refreshing.');
@@ -258,6 +293,7 @@ const MenuFinder: React.FC = () => {
         setSelectedMeal(meal);
         setSearchTerm(''); setSelectedHalls([]); setSelectedTags([]);
         setShowFavorites(false); setView('browse');
+        setSettleKey(k => k + 1);
     };
 
     const addToPlate = (item: MenuItem) => {
@@ -273,6 +309,14 @@ const MenuFinder: React.FC = () => {
         setPlateSel({ date: item.date, meal: item.meal });
     };
 
+    const handleToggleFavorite = (itemKey: string) => {
+        if (!favorites.includes(itemKey)) {
+            setPoppedStar(itemKey);
+            window.setTimeout(() => setPoppedStar(k => (k === itemKey ? null : k)), 400);
+        }
+        toggleFavorite(itemKey);
+    };
+
     const addToCalendar = (item: MenuItem) => {
         const startMap: Record<string, string> = { Breakfast: '080000', Brunch: '100000', Lunch: '110000', Dinner: '170000' };
         const endMap: Record<string, string> = { Breakfast: '100000', Brunch: '140000', Lunch: '140000', Dinner: '200000' };
@@ -285,88 +329,148 @@ const MenuFinder: React.FC = () => {
         window.open(url, '_blank');
     };
 
-    return (
-        <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-200">
+    const TABS: Array<{ id: typeof view; label: string; count: number }> = [
+        { id: 'browse', label: 'Browse', count: 0 },
+        { id: 'mymenu', label: 'My Menu', count: favorites.length },
+        { id: 'plate', label: 'Plate', count: selectedPlate.items.length },
+    ];
 
-            {/* ── Sticky header ── */}
-            <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-gray-200/70 dark:border-slate-800">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+    return (
+        <div className="min-h-screen bg-bg text-fg">
+
+            {/* ── App bar ── */}
+            <header className="sticky top-0 z-40 bg-surface/85 backdrop-blur-md border-b border-line">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3 sm:gap-5">
                     <div className="flex items-center gap-2.5 shrink-0">
-                        <div className="w-7 h-7 rounded-lg bg-[#00274C] flex items-center justify-center shrink-0 shadow-sm">
-                            <span className="text-[#FFCB05] font-extrabold text-sm leading-none">M</span>
-                        </div>
-                        <span className="font-bold text-gray-900 dark:text-white text-sm hidden sm:block tracking-tight">
+                        <span
+                            className="w-7 h-7 rounded-lg bg-navy text-maize grid place-items-center text-sm font-extrabold"
+                            aria-hidden="true"
+                        >
+                            M
+                        </span>
+                        <span className="hidden lg:block font-extrabold text-sm tracking-tight">
                             Michigan Food Finder
                         </span>
+                        <span className="lg:hidden sr-only">Michigan Food Finder</span>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <nav
+                        className="flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-2 border border-line"
+                        aria-label="Views"
+                    >
+                        {TABS.map(tab => {
+                            const active = view === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setView(tab.id)}
+                                    aria-current={active ? 'page' : undefined}
+                                    className={`px-2.5 sm:px-3 py-1.5 rounded-md text-[0.8125rem] font-semibold transition-colors ${
+                                        active
+                                            ? 'bg-surface text-fg shadow-panel ring-1 ring-line'
+                                            : 'text-fg-3 hover:text-fg-2'
+                                    }`}
+                                >
+                                    {tab.label}
+                                    {tab.count > 0 && (
+                                        <span className={`ml-1.5 tnum text-[0.6875rem] px-1 py-px rounded ${
+                                            active ? 'bg-maize-wash text-maize-ink' : 'text-fg-3'
+                                        }`}>
+                                            {tab.count}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </nav>
+
+                    <div className="flex-1" />
+
+                    <div className="flex items-center gap-2 shrink-0">
                         {authEnabled && (session ? (
                             <>
-                                <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 max-w-[9rem] truncate">
+                                <span className="hidden md:block text-xs text-fg-3 max-w-[9rem] truncate">
                                     {session.user.email}
                                 </span>
-                                <button onClick={signOut} className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors font-medium">
+                                <button
+                                    onClick={signOut}
+                                    className="text-xs px-2.5 py-1.5 rounded-lg border border-line text-fg-2 hover:bg-surface-2 hover:text-fg transition-colors font-semibold"
+                                >
                                     Sign out
                                 </button>
                             </>
                         ) : (
-                            <button onClick={signIn} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-medium flex items-center gap-1.5" title="Sign in to sync favorites across devices">
-                                <span className="font-bold text-blue-600 dark:text-blue-400">G</span> Sign in
+                            <button
+                                onClick={signIn}
+                                className="text-xs px-2.5 py-1.5 rounded-lg border border-line text-fg-2 hover:bg-surface-2 hover:text-fg transition-colors font-semibold flex items-center gap-1.5"
+                                title="Sign in to sync favorites and plates across devices"
+                            >
+                                <GoogleIcon size={14} /> <span className="hidden sm:inline">Sign in</span>
                             </button>
                         ))}
-                        <button onClick={() => setDarkMode(!darkMode)} className="p-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors" title="Toggle dark mode">
-                            {darkMode ? '🌙' : '☀️'}
+                        <button
+                            onClick={() => setDarkMode(!darkMode)}
+                            className="p-1.5 rounded-lg text-fg-3 hover:bg-surface-2 hover:text-fg transition-colors"
+                            aria-pressed={darkMode}
+                            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                        >
+                            {darkMode
+                                ? <MoonIcon size={17} title="Switch to light mode" />
+                                : <SunIcon size={17} title="Switch to dark mode" />}
                         </button>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+            <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
                 {/* ── Hero ── */}
-                <div className="text-center mb-10">
-                    <h1 className="text-3xl sm:text-4xl font-extrabold text-[#00274C] dark:text-white tracking-tight mb-2">
-                        Michigan Food Finder
-                    </h1>
-                    <p className="text-sm text-gray-400 dark:text-gray-500 mb-6">
-                        {dateRange
-                            ? `Menus ${formatShortDate(dateRange.start)} – ${formatShortDate(dateRange.end)}`
-                            : 'Explore menus across campus'}
-                    </p>
-                    <button
-                        onClick={handleOpenNow}
-                        className="inline-flex items-center gap-2 px-7 py-2.5 bg-[#FFCB05] hover:bg-[#e6b800] text-[#00274C] font-bold rounded-full shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-100"
-                    >
-                        <span>🕒</span> What's Open Now
-                    </button>
-                    <p className="mt-4 text-xs text-gray-400 dark:text-gray-600">
-                        {lastUpdated && `Updated ${new Date(lastUpdated).toLocaleString()} · `}
-                        Data may not be 100% accurate — verify with the dining hall.
-                    </p>
-                </div>
+                {view === 'browse' ? (
+                    <section className={`${PANEL} p-5 sm:p-6 mb-5 flex flex-col lg:flex-row lg:items-start lg:gap-10`}>
+                        <div className="lg:flex-1 min-w-0">
+                            <h1 className="text-[1.625rem] sm:text-[2rem] font-extrabold tracking-tight leading-tight text-balance">
+                                {headline.line}
+                            </h1>
+                            <p className="mt-1.5 text-sm text-fg-3">
+                                {dateRange
+                                    ? `Seven halls · ${formatShortDate(dateRange.start)} – ${formatShortDate(dateRange.end)}`
+                                    : 'Seven halls across campus'}
+                                {lastUpdated && ` · ${freshness(lastUpdated)}`}
+                            </p>
 
-                {/* ── View tabs ── */}
-                <div className="flex justify-center mb-6">
-                    <div className="flex bg-gray-100 dark:bg-slate-800 rounded-xl p-1 gap-1">
-                        {(['browse', 'mymenu', 'plate'] as const).map(v => (
-                            <button
-                                key={v}
-                                onClick={() => setView(v)}
-                                className={`px-5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                                    view === v
-                                        ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                                }`}
-                            >
-                                {v === 'browse'
-                                    ? '🍽️ Browse'
-                                    : v === 'mymenu'
-                                        ? `★ My Menu${favorites.length > 0 ? ` (${favorites.length})` : ''}`
-                                        : `🧮 Plate${selectedPlate.items.length > 0 ? ` (${selectedPlate.items.length})` : ''}`}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                            <div className="mt-5 flex flex-wrap items-center gap-3">
+                                <button
+                                    onClick={handleOpenNow}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-navy text-on-navy font-bold text-sm shadow-panel hover:bg-navy-2 hover:shadow-lift active:translate-y-px transition-all duration-150"
+                                >
+                                    <ClockIcon size={16} />
+                                    What&rsquo;s on right now
+                                </button>
+                                <p className="text-xs text-fg-3 tnum">
+                                    {items.length.toLocaleString()} items tracked
+                                </p>
+                            </div>
+                        </div>
+
+                        <p className="mt-4 pt-4 border-t border-line text-xs text-fg-3 leading-relaxed
+                                      lg:mt-0 lg:pt-0 lg:border-t-0 lg:border-l lg:pl-10 lg:w-[22rem] lg:shrink-0 lg:self-stretch">
+                            Menus are scraped from the dining site, so treat them as a good guess rather
+                            than gospel. Halls swap things out without telling anyone, so it is worth a
+                            glance at the hall&rsquo;s own posting before you commit to the walk.
+                        </p>
+                    </section>
+                ) : (
+                    <section className="mb-5">
+                        <h1 className="text-[1.5rem] sm:text-[1.875rem] font-extrabold tracking-tight">
+                            {view === 'plate' ? 'Your plate' : 'Your menu'}
+                        </h1>
+                        <p className="mt-1 text-sm text-fg-3">
+                            {view === 'plate'
+                                ? 'Everything you picked for one meal, added up.'
+                                : 'Everything you starred, on the days it is actually being served.'}
+                        </p>
+                    </section>
+                )}
 
                 {view === 'plate' ? (
                     <PlateView
@@ -387,7 +491,7 @@ const MenuFinder: React.FC = () => {
                     <MyMenu
                         items={items}
                         favorites={favorites}
-                        toggleFavorite={toggleFavorite}
+                        toggleFavorite={handleToggleFavorite}
                         addToCalendar={addToCalendar}
                         signedIn={session !== null}
                         authEnabled={authEnabled}
@@ -395,21 +499,24 @@ const MenuFinder: React.FC = () => {
                 ) : (
                     <>
                         {error && (
-                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 mb-6 text-center text-sm text-red-600 dark:text-red-400">
-                                {error}
+                            <div className="flex items-start gap-2.5 border border-danger/40 bg-danger-wash text-danger rounded-xl px-4 py-3 mb-5 text-sm">
+                                <AlertIcon size={16} className="shrink-0 mt-px" />
+                                <span>{error}</span>
                             </div>
                         )}
 
                         {/* ── Filters ── */}
-                        <div className="bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 p-4 mb-6 space-y-3">
-
-                            {/* Search + Date + Meal */}
+                        <div className={`${PANEL} p-4 mb-6`}>
                             <div className="flex flex-col sm:flex-row gap-3">
-                                <div className="relative flex-1">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-sm select-none">🔍</span>
+                                <div className="relative flex-1 min-w-0">
+                                    <SearchIcon
+                                        size={16}
+                                        className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-3 pointer-events-none"
+                                    />
                                     <input
                                         type="text"
-                                        className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-[#FFCB05]/60 focus:border-[#FFCB05] outline-none transition-all bg-gray-50 dark:bg-slate-700 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
+                                        aria-label="Search menu items"
+                                        className={`${FIELD} pl-9`}
                                         placeholder="Search items…"
                                         value={searchTerm}
                                         onChange={e => setSearchTerm(e.target.value)}
@@ -419,90 +526,108 @@ const MenuFinder: React.FC = () => {
                                         {uniqueItemNames.slice(0, 50).map(name => <option key={name} value={name} />)}
                                     </datalist>
                                 </div>
-                                <select
-                                    className="sm:w-44 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-[#FFCB05]/60 outline-none bg-gray-50 dark:bg-slate-700 dark:text-white"
-                                    value={selectedDate}
-                                    onChange={e => setSelectedDate(e.target.value)}
-                                >
-                                    <option value="">All dates</option>
-                                    {uniqueDates.map(date => (
-                                        <option key={date} value={date}>{formatShortDate(date)}</option>
-                                    ))}
-                                </select>
-                                <select
-                                    className="sm:w-36 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-[#FFCB05]/60 outline-none bg-gray-50 dark:bg-slate-700 dark:text-white"
-                                    value={selectedMeal}
-                                    onChange={e => setSelectedMeal(e.target.value)}
-                                >
-                                    <option value="">All meals</option>
-                                    {MEALS.map(m => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                            </div>
 
-                            {/* Hall chips */}
-                            <div className="flex flex-wrap gap-2">
-                                {DINING_HALLS.map(hall => (
-                                    <button
-                                        key={hall}
-                                        onClick={() => toggleHall(hall)}
-                                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                            selectedHalls.includes(hall)
-                                                ? 'bg-[#00274C] text-white dark:bg-[#003870]'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
-                                        }`}
+                                <div className="relative sm:w-44">
+                                    <select
+                                        aria-label="Filter by day"
+                                        className={`${FIELD} appearance-none pr-9 cursor-pointer`}
+                                        value={selectedDate}
+                                        onChange={e => setSelectedDate(e.target.value)}
                                     >
-                                        {hall}
-                                    </button>
-                                ))}
+                                        <option value="">All days</option>
+                                        {uniqueDates.map(date => (
+                                            <option key={date} value={date}>{formatShortDate(date)}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDownIcon
+                                        size={15}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-3 pointer-events-none"
+                                    />
+                                </div>
+
+                                <div className="relative sm:w-36">
+                                    <select
+                                        aria-label="Filter by meal"
+                                        className={`${FIELD} appearance-none pr-9 cursor-pointer`}
+                                        value={selectedMeal}
+                                        onChange={e => setSelectedMeal(e.target.value)}
+                                    >
+                                        <option value="">All meals</option>
+                                        {MEALS.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    <ChevronDownIcon
+                                        size={15}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-3 pointer-events-none"
+                                    />
+                                </div>
                             </div>
 
-                            {/* Favorites · Tags · Count · Clear */}
-                            <div className="flex items-center flex-wrap gap-2 pt-1 border-t border-gray-100 dark:border-slate-700/50">
+                            <div className="flex flex-wrap gap-1.5 mt-3">
+                                {DINING_HALLS.map(hall => {
+                                    const on = selectedHalls.includes(hall);
+                                    return (
+                                        <button
+                                            key={hall}
+                                            onClick={() => toggleHall(hall)}
+                                            aria-pressed={on}
+                                            className={`${CHIP} ${on ? CHIP_ON : CHIP_OFF}`}
+                                        >
+                                            {hall}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="flex items-center flex-wrap gap-2 mt-3 pt-3 border-t border-line">
                                 <button
                                     onClick={() => setShowFavorites(!showFavorites)}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                    aria-pressed={showFavorites}
+                                    className={`${CHIP} flex items-center gap-1.5 ${
                                         showFavorites
-                                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
+                                            ? 'bg-maize-wash border-maize-ink/40 text-maize-ink'
+                                            : CHIP_OFF
                                     }`}
                                 >
-                                    <span>{showFavorites ? '★' : '☆'}</span> Favorites
+                                    <StarIcon size={13} filled={showFavorites} /> Starred
                                 </button>
                                 <button
                                     onClick={() => setShowTagFilter(!showTagFilter)}
-                                    className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                        selectedTags.length > 0
-                                            ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
+                                    aria-expanded={showTagFilter}
+                                    className={`${CHIP} flex items-center gap-1.5 ${
+                                        selectedTags.length > 0 ? CHIP_ON : CHIP_OFF
                                     }`}
                                 >
-                                    Tags{selectedTags.length > 0 ? ` (${selectedTags.length})` : ''}
-                                    <span className="text-[10px] ml-0.5">{showTagFilter ? '▲' : '▼'}</span>
+                                    Tags{selectedTags.length > 0 ? ` · ${selectedTags.length}` : ''}
+                                    <ChevronDownIcon
+                                        size={13}
+                                        className={`transition-transform duration-200 ${showTagFilter ? 'rotate-180' : ''}`}
+                                    />
                                 </button>
+
                                 <div className="flex-1" />
-                                <span className="text-xs text-gray-400 dark:text-gray-500">
+
+                                <span className="text-xs text-fg-3 tnum">
                                     {filteredItems.length.toLocaleString()} item{filteredItems.length !== 1 ? 's' : ''}
-                                    {allDates.length > 0 && ` · ${allDates.length} date${allDates.length !== 1 ? 's' : ''}`}
+                                    {allDates.length > 0 && ` · ${allDates.length} day${allDates.length !== 1 ? 's' : ''}`}
                                 </span>
                                 {activeFilterCount > 0 && (
-                                    <button onClick={clearAllFilters} className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 underline transition-colors">
-                                        Clear all
+                                    <button
+                                        onClick={clearAllFilters}
+                                        className="text-xs font-semibold text-fg-2 hover:text-danger transition-colors"
+                                    >
+                                        Clear {activeFilterCount}
                                     </button>
                                 )}
                             </div>
 
-                            {/* Tag panel */}
                             {showTagFilter && (
-                                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-gray-100 dark:border-slate-700/50 max-h-32 overflow-y-auto">
+                                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-line max-h-36 overflow-y-auto">
                                     {uniqueTags.map(tag => (
                                         <button
                                             key={tag}
                                             onClick={() => toggleTag(tag)}
-                                            className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
-                                                selectedTags.includes(tag)
-                                                    ? 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700'
-                                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-slate-700 dark:text-gray-300 dark:border-slate-600 dark:hover:bg-slate-600'
-                                            }`}
+                                            aria-pressed={selectedTags.includes(tag)}
+                                            className={`${CHIP} ${selectedTags.includes(tag) ? CHIP_ON : CHIP_OFF}`}
                                         >
                                             {tag}
                                         </button>
@@ -514,248 +639,291 @@ const MenuFinder: React.FC = () => {
                         {/* ── Results ── */}
                         {loading ? (
                             <>
-                                {[1, 2].map(i => (
-                                    <div key={i} className="mb-8">
-                                        <div className="h-5 w-44 bg-gray-200 dark:bg-slate-700 rounded animate-pulse mb-3" />
-                                        <SkeletonGroup />
-                                        <SkeletonGroup />
-                                        <SkeletonGroup />
-                                    </div>
-                                ))}
+                                <div className="h-6 w-48 bg-surface-3 rounded animate-pulse mb-4" />
+                                <SkeletonCard />
+                                <SkeletonCard />
                             </>
                         ) : filteredItems.length === 0 ? (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 p-16 text-center">
-                                <p className="text-4xl mb-3">🍽️</p>
-                                <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">Nothing found</p>
-                                <p className="text-sm text-gray-400 dark:text-gray-500">
+                            <div className={`${PANEL} px-6 py-16 text-center`}>
+                                <TrayIcon size={40} className="mx-auto text-fg-3" />
+                                <p className="mt-4 text-lg font-extrabold">
                                     {showFavorites && favorites.length === 0
-                                        ? 'Star items in Browse to save favorites here.'
-                                        : 'Try adjusting your filters.'}
+                                        ? 'Nothing starred yet'
+                                        : 'Nothing matches that'}
                                 </p>
+                                <p className="mt-1.5 text-sm text-fg-3 max-w-[38ch] mx-auto leading-relaxed">
+                                    {showFavorites && favorites.length === 0
+                                        ? 'Star anything while browsing and it will turn up here the next time it is being served.'
+                                        : 'Plenty on the menu, just not this. Try dropping a hall or widening the day.'}
+                                </p>
+                                {activeFilterCount > 0 && (
+                                    <button
+                                        onClick={clearAllFilters}
+                                        className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-navy text-on-navy text-sm font-bold shadow-panel hover:bg-navy-2 transition-colors"
+                                    >
+                                        Clear all filters
+                                    </button>
+                                )}
                             </div>
                         ) : (
-                            <>
-                                {visibleDates.map(date => {
+                            <div key={settleKey}>
+                                {visibleDates.map((date, dayIndex) => {
                                     const mealMap = grouped.get(date)!;
                                     return (
-                                        <div key={date} className="mb-8">
-                                            {/* Date heading */}
+                                        <section
+                                            key={date}
+                                            className="mb-8 settle"
+                                            style={{ animationDelay: `${dayIndex * 80}ms` }}
+                                        >
                                             <div className="flex items-center gap-2.5 mb-3">
-                                                <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                                                <h2 className="text-base sm:text-lg font-extrabold tracking-tight">
                                                     {formatLongDate(date)}
                                                 </h2>
                                                 {date === today && (
-                                                    <span className="text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                                                    <span className="label px-2 py-1 rounded-md bg-maize text-[#0f172a]">
                                                         Today
                                                     </span>
                                                 )}
                                             </div>
 
-                                            {/* One card per meal × hall */}
-                                            <div className="space-y-3">
+                                            <div className="space-y-4">
                                                 {[...mealMap.entries()]
                                                     .sort(([a], [b]) => MEALS.indexOf(a) - MEALS.indexOf(b))
                                                     .flatMap(([meal, hallMap]) =>
                                                         [...hallMap.entries()]
                                                             .sort(([a], [b]) => a.localeCompare(b))
-                                                            .map(([hall, stationMap]) => (
-                                                                <div
-                                                                    key={`${meal}-${hall}`}
-                                                                    className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden"
-                                                                >
-                                                                    {/* Card header: meal badge + hall name */}
-                                                                    <div className="flex items-center gap-2.5 px-4 py-3 bg-gray-50 dark:bg-slate-700/40 border-b border-gray-100 dark:border-slate-700/50">
-                                                                        <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${MEAL_COLORS[meal] ?? 'bg-gray-100 text-gray-600'}`}>
-                                                                            {meal}
-                                                                        </span>
-                                                                        <span className="font-semibold text-sm text-gray-800 dark:text-gray-100">{hall}</span>
-                                                                    </div>
-
-                                                                    {/* Station groups → item rows */}
-                                                                    {[...stationMap.entries()].map(([station, stationItems]) => (
-                                                                        <div key={station}>
-                                                                            {station && (
-                                                                                <div className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-50/60 dark:bg-slate-900/20 border-b border-gray-100 dark:border-slate-700/30">
-                                                                                    {station}
-                                                                                </div>
-                                                                            )}
-                                                                            {stationItems.map((item, idx) => {
-                                                                                const isFav = favorites.includes(item.item_key);
-                                                                                return (
-                                                                                    <div
-                                                                                        key={`${item.item_key}-${idx}`}
-                                                                                        className={`flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-slate-700/30 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/20 transition-colors ${isFav ? 'bg-yellow-50/60 dark:bg-yellow-900/10' : ''}`}
-                                                                                    >
-                                                                                        <button
-                                                                                            onClick={() => toggleFavorite(item.item_key)}
-                                                                                            className={`text-lg shrink-0 transition-all hover:scale-110 active:scale-95 ${isFav ? 'text-yellow-400' : 'text-gray-200 dark:text-slate-700 hover:text-yellow-400'}`}
-                                                                                            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-                                                                                        >
-                                                                                            {isFav ? '★' : '☆'}
-                                                                                        </button>
-                                                                                        <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white min-w-0 truncate">
-                                                                                            {item.item_display}
-                                                                                        </span>
-                                                                                        {/* Tags — hidden on small screens to keep rows compact */}
-                                                                                        <div className="hidden sm:flex items-center gap-1 shrink-0">
-                                                                                            {item.nutrient_density && (
-                                                                                                <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                                                                                                    ND: {item.nutrient_density}
-                                                                                                </span>
-                                                                                            )}
-                                                                                            {item.carbon_footprint && (
-                                                                                                <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                                                                                    CF: {item.carbon_footprint}
-                                                                                                </span>
-                                                                                            )}
-                                                                                            {item.other_tags.slice(0, 2).map(tag => (
-                                                                                                <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-400">
-                                                                                                    {tag}
-                                                                                                </span>
-                                                                                            ))}
-                                                                                            {item.other_tags.length > 2 && (
-                                                                                                <span className="text-xs text-gray-400 dark:text-slate-500">
-                                                                                                    +{item.other_tags.length - 2}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        {/* Calories with macro tooltip */}
-                                                                                        {item.nutrition?.calories != null ? (
-                                                                                            <div className="group relative shrink-0">
-                                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap tabular-nums cursor-default">
-                                                                                                    {item.nutrition.calories} kcal
-                                                                                                </span>
-                                                                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-40 bg-gray-900 dark:bg-slate-700 text-white text-xs rounded-xl p-2.5 z-10 shadow-xl pointer-events-none">
-                                                                                                    <div className="space-y-1">
-                                                                                                        {item.nutrition.serving_size && (
-                                                                                                            <div className="pb-1 mb-1 border-b border-white/15 text-gray-300">
-                                                                                                                {item.nutrition.serving_size}
-                                                                                                            </div>
-                                                                                                        )}
-                                                                                                        {item.nutrition.total_fat && <div className="flex justify-between"><span className="text-gray-400">Fat</span><span>{item.nutrition.total_fat}</span></div>}
-                                                                                                        {item.nutrition.total_carbohydrate && <div className="flex justify-between"><span className="text-gray-400">Carbs</span><span>{item.nutrition.total_carbohydrate}</span></div>}
-                                                                                                        {item.nutrition.protein && <div className="flex justify-between"><span className="text-gray-400">Protein</span><span>{item.nutrition.protein}</span></div>}
-                                                                                                        {item.nutrition.sodium && <div className="flex justify-between"><span className="text-gray-400">Sodium</span><span>{item.nutrition.sodium}</span></div>}
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        ) : (
-                                                                                            <span className="text-xs text-gray-200 dark:text-slate-700 shrink-0 tabular-nums">—</span>
-                                                                                        )}
-                                                                                        <button
-                                                                                            onClick={() => addToCalendar(item)}
-                                                                                            className="text-gray-300 dark:text-slate-700 hover:text-blue-500 dark:hover:text-blue-400 transition-colors text-sm shrink-0"
-                                                                                            title="Add to Google Calendar"
-                                                                                        >
-                                                                                            📅
-                                                                                        </button>
-                                                                                        {(() => {
-                                                                                            const rowId = entryId({
-                                                                                                item_key: item.item_key,
-                                                                                                hall: item.hall,
-                                                                                                station: item.station ?? '',
-                                                                                            });
-                                                                                            const onPlate = getPlate(item.date, item.meal)
-                                                                                                .items.find(e => entryId(e) === rowId);
-                                                                                            const btn = 'w-6 h-6 rounded-lg text-xs font-bold shrink-0 transition-colors leading-none';
-                                                                                            const plain = 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-slate-600';
-
-                                                                                            if (!onPlate) {
-                                                                                                return (
-                                                                                                    <button
-                                                                                                        onClick={() => addToPlate(item)}
-                                                                                                        className={`${btn} ${plain}`}
-                                                                                                        title="Add to plate"
-                                                                                                    >
-                                                                                                        +
-                                                                                                    </button>
-                                                                                                );
-                                                                                            }
-
-                                                                                            // At the minimum there is no lower step, so the
-                                                                                            // control turns into an explicit remove.
-                                                                                            const atMin = onPlate.servings <= MIN_SERVINGS;
-                                                                                            return (
-                                                                                                <div className="flex items-center gap-0.5 shrink-0">
-                                                                                                    <button
-                                                                                                        onClick={() => decrementItem(item.date, item.meal, rowId)}
-                                                                                                        className={`${btn} ${atMin
-                                                                                                            ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60'
-                                                                                                            : plain}`}
-                                                                                                        title={atMin ? 'Remove from plate' : 'Fewer servings'}
-                                                                                                    >
-                                                                                                        {atMin ? '×' : '−'}
-                                                                                                    </button>
-                                                                                                    <span className="w-6 text-center text-xs font-bold tabular-nums text-[#00274C] dark:text-blue-300">
-                                                                                                        {onPlate.servings}
-                                                                                                    </span>
-                                                                                                    <button
-                                                                                                        onClick={() => addToPlate(item)}
-                                                                                                        className={`${btn} bg-[#00274C] text-white hover:bg-[#003870] dark:bg-[#003870] dark:hover:bg-[#004a94]`}
-                                                                                                        title="More servings"
-                                                                                                    >
-                                                                                                        +
-                                                                                                    </button>
-                                                                                                </div>
-                                                                                            );
-                                                                                        })()}
-                                                                                    </div>
-                                                                                );
-                                                                            })}
+                                                            .map(([hall, stationMap]) => {
+                                                                const total = [...stationMap.values()]
+                                                                    .reduce((n, arr) => n + arr.length, 0);
+                                                                return (
+                                                                    <article
+                                                                        key={`${meal}-${hall}`}
+                                                                        className={`${PANEL} overflow-hidden`}
+                                                                    >
+                                                                        {/* Hall header */}
+                                                                        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-line">
+                                                                            <span className={`label shrink-0 px-2 py-1 rounded-md ${MEAL_CHIP[meal] ?? 'bg-surface-2 text-fg-2'}`}>
+                                                                                {meal}
+                                                                            </span>
+                                                                            <h3 className="font-bold text-[0.9375rem] truncate">{hall}</h3>
+                                                                            <span className="flex-1" />
+                                                                            <span className="text-xs text-fg-3 tnum shrink-0">
+                                                                                {total} item{total !== 1 ? 's' : ''}
+                                                                            </span>
                                                                         </div>
-                                                                    ))}
-                                                                </div>
-                                                            ))
-                                                    )
-                                                }
+
+                                                                        {/* Stations, each its own banded block */}
+                                                                        {[...stationMap.entries()].map(([station, stationItems]) => (
+                                                                            <div key={station}>
+                                                                                {station && (
+                                                                                    <div className="flex items-center gap-2 px-4 py-2 bg-surface-2 border-b border-line">
+                                                                                        <span className="label text-fg-2">{station}</span>
+                                                                                        <span className="flex-1" />
+                                                                                        <span className="text-[0.6875rem] text-fg-3 tnum">
+                                                                                            {stationItems.length}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                <ul className="divide-y divide-line">
+                                                                                    {stationItems.map((item, idx) => {
+                                                                                        const isFav = favorites.includes(item.item_key);
+                                                                                        const rowId = entryId({
+                                                                                            item_key: item.item_key,
+                                                                                            hall: item.hall,
+                                                                                            station: item.station ?? '',
+                                                                                        });
+                                                                                        const onPlate = getPlate(item.date, item.meal)
+                                                                                            .items.find(e => entryId(e) === rowId);
+                                                                                        const atMin = onPlate ? onPlate.servings <= MIN_SERVINGS : false;
+                                                                                        const step =
+                                                                                            'w-7 h-7 grid place-items-center rounded-lg shrink-0 transition-colors';
+
+                                                                                        return (
+                                                                                            <li
+                                                                                                key={`${item.item_key}-${idx}`}
+                                                                                                className={`flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-surface-2 ${
+                                                                                                    isFav ? 'bg-maize-wash' : ''
+                                                                                                }`}
+                                                                                            >
+                                                                                                <button
+                                                                                                    onClick={() => handleToggleFavorite(item.item_key)}
+                                                                                                    aria-pressed={isFav}
+                                                                                                    aria-label={isFav
+                                                                                                        ? `Unstar ${item.item_display}`
+                                                                                                        : `Star ${item.item_display}`}
+                                                                                                    className={`shrink-0 transition-colors ${
+                                                                                                        isFav
+                                                                                                            ? 'text-maize-ink'
+                                                                                                            : 'text-icon-idle hover:text-maize-ink'
+                                                                                                    } ${poppedStar === item.item_key ? 'star-pop' : ''}`}
+                                                                                                >
+                                                                                                    <StarIcon size={16} filled={isFav} />
+                                                                                                </button>
+
+                                                                                                <span className="flex-1 min-w-0 flex items-center gap-2">
+                                                                                                <span className="text-sm font-medium min-w-0 truncate">
+                                                                                                    {item.item_display}
+                                                                                                </span>
+
+                                                                                                <span className="hidden md:flex items-center gap-1 shrink-0">
+                                                                                                    {marksFor(item).map(({ text, diet }) => (
+                                                                                                        <span
+                                                                                                            key={text}
+                                                                                                            className={`text-[0.6875rem] font-semibold px-1.5 py-0.5 rounded border ${
+                                                                                                                diet ? 'border-good/35 text-good' : 'border-line text-fg-3'
+                                                                                                            }`}
+                                                                                                        >
+                                                                                                            {text}
+                                                                                                        </span>
+                                                                                                    ))}
+                                                                                                </span>
+                                                                                                </span>
+
+                                                                                                {item.nutrition?.calories != null ? (
+                                                                                                    <div className="group/cal relative shrink-0 sm:w-[4.5rem] text-right">
+                                                                                                        <span className="text-[0.8125rem] font-semibold text-fg-2 tnum whitespace-nowrap cursor-default">
+                                                                                                            {item.nutrition.calories}
+                                                                                                            <span className="hidden sm:inline text-fg-3 font-medium text-[0.6875rem] ml-0.5">kcal</span>
+                                                                                                        </span>
+                                                                                                        <div className="absolute bottom-full right-0 mb-2 hidden group-hover/cal:block w-44 bg-surface border border-line rounded-lg p-3 z-20 shadow-pop pointer-events-none text-left">
+                                                                                                            {item.nutrition.serving_size && (
+                                                                                                                <div className="pb-1.5 mb-1.5 border-b border-line text-xs text-fg-3">
+                                                                                                                    {item.nutrition.serving_size}
+                                                                                                                </div>
+                                                                                                            )}
+                                                                                                            <dl className="space-y-1 tnum text-xs">
+                                                                                                                {([
+                                                                                                                    ['Fat', item.nutrition.total_fat],
+                                                                                                                    ['Carbs', item.nutrition.total_carbohydrate],
+                                                                                                                    ['Protein', item.nutrition.protein],
+                                                                                                                    ['Sodium', item.nutrition.sodium],
+                                                                                                                ] as Array<[string, string | null]>)
+                                                                                                                    .filter(([, v]) => v)
+                                                                                                                    .map(([label, value]) => (
+                                                                                                                        <div key={label} className="flex justify-between gap-4">
+                                                                                                                            <dt className="text-fg-3">{label}</dt>
+                                                                                                                            <dd className="font-semibold">{value}</dd>
+                                                                                                                        </div>
+                                                                                                                    ))}
+                                                                                                            </dl>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ) : (
+                                                                                                    <span
+                                                                                                        className="text-[0.8125rem] text-fg-3 shrink-0 sm:w-[4.5rem] text-right"
+                                                                                                        title="No nutrition published"
+                                                                                                    >
+                                                                                                        —
+                                                                                                    </span>
+                                                                                                )}
+
+                                                                                                <button
+                                                                                                    onClick={() => addToCalendar(item)}
+                                                                                                    className="text-fg-3 hover:text-navy-ink transition-colors shrink-0 p-1 rounded-md hover:bg-surface-3"
+                                                                                                    aria-label={`Add ${item.item_display} to Google Calendar`}
+                                                                                                    title="Add to Google Calendar"
+                                                                                                >
+                                                                                                    <CalendarIcon size={16} />
+                                                                                                </button>
+
+                                                                                                {!onPlate ? (
+                                                                                                    <span className="sm:w-[5.25rem] flex justify-end shrink-0">
+                                                                                                        <button
+                                                                                                            onClick={() => addToPlate(item)}
+                                                                                                            className={`${step} border border-line-2 text-fg-2 hover:bg-navy hover:border-navy hover:text-on-navy`}
+                                                                                                            aria-label={`Add ${item.item_display} to plate`}
+                                                                                                            title="Add to plate"
+                                                                                                        >
+                                                                                                            <PlusIcon size={15} />
+                                                                                                        </button>
+                                                                                                    </span>
+                                                                                                ) : (
+                                                                                                    <span className="sm:w-[5.25rem] flex items-center justify-end gap-1 shrink-0">
+                                                                                                        <button
+                                                                                                            onClick={() => decrementItem(item.date, item.meal, rowId)}
+                                                                                                            className={`${step} border ${atMin
+                                                                                                                ? 'border-danger/40 text-danger hover:bg-danger-wash'
+                                                                                                                : 'border-line-2 text-fg-2 hover:bg-surface-3'}`}
+                                                                                                            aria-label={atMin
+                                                                                                                ? `Remove ${item.item_display} from plate`
+                                                                                                                : `One fewer serving of ${item.item_display}`}
+                                                                                                            title={atMin ? 'Remove from plate' : 'Fewer servings'}
+                                                                                                        >
+                                                                                                            {atMin ? <CloseIcon size={14} /> : <MinusIcon size={15} />}
+                                                                                                        </button>
+                                                                                                        <span className="w-5 text-center text-[0.8125rem] font-bold tnum">
+                                                                                                            {onPlate.servings}
+                                                                                                        </span>
+                                                                                                        <button
+                                                                                                            onClick={() => addToPlate(item)}
+                                                                                                            className={`${step} bg-navy text-on-navy hover:bg-navy-2`}
+                                                                                                            aria-label={`One more serving of ${item.item_display}`}
+                                                                                                            title="More servings"
+                                                                                                        >
+                                                                                                            <PlusIcon size={15} />
+                                                                                                        </button>
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </li>
+                                                                                        );
+                                                                                    })}
+                                                                                </ul>
+                                                                            </div>
+                                                                        ))}
+                                                                    </article>
+                                                                );
+                                                            })
+                                                    )}
                                             </div>
-                                        </div>
+                                        </section>
                                     );
                                 })}
 
-                                {/* ── Pagination ── */}
                                 {totalPages > 1 && (
-                                    <div className="flex items-center justify-between mt-4">
-                                        <span className="text-sm text-gray-400 dark:text-gray-500">
+                                    <div className="flex items-center justify-between gap-4 mt-6">
+                                        <span className="text-xs text-fg-3 tnum">
                                             Page {currentPage} of {totalPages}
                                         </span>
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                                 disabled={currentPage === 1}
-                                                className="px-4 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface border border-line text-sm font-semibold text-fg-2 hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-surface transition-colors"
                                             >
-                                                ← Prev
+                                                <ArrowLeftIcon size={15} /> Earlier
                                             </button>
                                             <button
                                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                                 disabled={currentPage === totalPages}
-                                                className="px-4 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface border border-line text-sm font-semibold text-fg-2 hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-surface transition-colors"
                                             >
-                                                Next →
+                                                Later <ArrowRightIcon size={15} />
                                             </button>
                                         </div>
                                     </div>
                                 )}
-                            </>
+                            </div>
                         )}
                     </>
                 )}
             </main>
 
-            <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-8 text-center">
-                <p className="text-xs text-gray-300 dark:text-slate-700">
-                    Michigan Food Finder · Not affiliated with the University of Michigan
-                </p>
-                <a
-                    href="https://github.com/BereZone/MichiganFoodFinder/blob/main/CHANGELOG.md"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="View changelog"
-                    className="inline-block mt-2 px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-800 text-[10px] font-mono tabular-nums text-gray-300 dark:text-slate-700 hover:text-gray-500 dark:hover:text-slate-500 hover:border-gray-300 dark:hover:border-slate-700 transition-colors"
-                >
-                    v{__APP_VERSION__}
-                </a>
+            <footer className="border-t border-line mt-4">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-fg-3">
+                        Michigan Food Finder · Not affiliated with the University of Michigan
+                    </p>
+                    <a
+                        href="https://github.com/BereZone/MichiganFoodFinder/blob/main/CHANGELOG.md"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="What changed recently"
+                        className="px-2 py-1 rounded-md border border-line text-[10px] font-semibold tnum text-fg-3 hover:text-fg hover:bg-surface-2 transition-colors"
+                    >
+                        v{__APP_VERSION__}
+                    </a>
+                </div>
             </footer>
         </div>
     );

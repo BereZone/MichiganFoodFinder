@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
 import type { MenuItem } from '../types';
+import { MEAL_CHIP } from '../lib/boardVoice';
+import { StarIcon, CalendarIcon, CloseIcon, TrayIcon, AlertIcon } from './Icon';
 
 const MEAL_ORDER = ['Breakfast', 'Brunch', 'Lunch', 'Dinner'];
 
@@ -11,6 +13,8 @@ interface Props {
     signedIn: boolean;
     authEnabled: boolean;
 }
+
+const PANEL = 'bg-surface border border-line rounded-xl shadow-panel';
 
 function localToday(): string {
     const d = new Date();
@@ -51,11 +55,12 @@ const MyMenu: React.FC<Props> = ({ items, favorites, toggleFavorite, addToCalend
 
     if (favorites.length === 0) {
         return (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 p-16 text-center">
-                <p className="text-4xl mb-4">☆</p>
-                <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">No favorites yet</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500">
-                    Star items in Browse and they'll appear here whenever they're on an upcoming menu.
+            <div className={`${PANEL} px-6 py-16 text-center`}>
+                <StarIcon size={40} className="mx-auto text-fg-3" />
+                <p className="mt-4 text-lg font-extrabold">Nothing starred yet</p>
+                <p className="mt-1.5 text-sm text-fg-3 max-w-[38ch] mx-auto leading-relaxed">
+                    Star anything while browsing and this becomes a standing watch list. It shows
+                    every upcoming day your picks turn up, soonest first.
                 </p>
             </div>
         );
@@ -64,84 +69,103 @@ const MyMenu: React.FC<Props> = ({ items, favorites, toggleFavorite, addToCalend
     return (
         <div className="space-y-4">
             {authEnabled && !signedIn && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-4 py-3 text-sm text-blue-700 dark:text-blue-300 text-center">
-                    Favorites are saved on this device only — sign in to sync across devices.
+                <div className="flex items-start gap-2.5 border border-line bg-navy-wash text-fg-2 rounded-xl px-4 py-3 text-sm">
+                    <AlertIcon size={16} className="shrink-0 mt-px text-navy-ink" />
+                    <span>Stars live in this browser only. Sign in and they follow you to your phone.</span>
                 </div>
             )}
 
             {byDate.size === 0 && (
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 p-12 text-center text-gray-400 dark:text-gray-500">
-                    None of your favorites are on the menu in the next two weeks.
+                <div className={`${PANEL} px-6 py-14 text-center`}>
+                    <TrayIcon size={36} className="mx-auto text-fg-3" />
+                    <p className="mt-4 text-base font-extrabold">Not in the next two weeks</p>
+                    <p className="mt-1.5 text-sm text-fg-3 max-w-[36ch] mx-auto leading-relaxed">
+                        None of your stars are on an upcoming menu. They are still saved.
+                    </p>
                 </div>
             )}
 
             {[...byDate.entries()].map(([date, dayItems]) => (
-                <div key={date} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-100 dark:border-slate-700/50 flex items-center gap-2.5">
-                        <h2 className="font-bold text-gray-900 dark:text-white text-sm">{prettyDate(date)}</h2>
+                <section key={date}>
+                    <div className="flex items-center gap-2.5 mb-3">
+                        <h2 className="text-base sm:text-lg font-extrabold tracking-tight">{prettyDate(date)}</h2>
                         {date === today && (
-                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
-                                Today
-                            </span>
+                            <span className="label px-2 py-1 rounded-md bg-maize text-[#0f172a]">Today</span>
                         )}
                     </div>
-                    <ul className="divide-y divide-gray-100 dark:divide-slate-700/50">
-                        {dayItems.map((item, idx) => (
-                            <li
-                                key={`${item.item_key}-${item.meal}-${item.hall}-${item.station}-${idx}`}
-                                className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors"
-                            >
-                                <button
-                                    onClick={() => toggleFavorite(item.item_key)}
-                                    className="text-yellow-400 hover:scale-110 transition-transform text-xl shrink-0"
-                                    title="Remove from favorites"
+
+                    <div className={`${PANEL} overflow-hidden`}>
+                        <ul className="divide-y divide-line">
+                            {dayItems.map((item, idx) => (
+                                <li
+                                    key={`${item.item_key}-${item.meal}-${item.hall}-${item.station}-${idx}`}
+                                    className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2 transition-colors"
                                 >
-                                    ★
-                                </button>
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{item.item_display}</p>
-                                    <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
-                                        {item.hall} · {item.meal}{item.station ? ` · ${item.station}` : ''}
-                                    </p>
-                                </div>
-                                {item.nutrition?.calories != null && (
-                                    <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0">
-                                        {item.nutrition.calories} kcal
-                                    </span>
-                                )}
-                                <button
-                                    onClick={() => addToCalendar(item)}
-                                    className="text-gray-300 dark:text-slate-700 hover:text-blue-500 dark:hover:text-blue-400 transition-colors text-base shrink-0"
-                                    title="Add to Google Calendar"
-                                >
-                                    📅
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
+                                    <button
+                                        onClick={() => toggleFavorite(item.item_key)}
+                                        className="text-maize-ink hover:text-danger transition-colors shrink-0"
+                                        aria-label={`Unstar ${item.item_display}`}
+                                        title="Unstar"
+                                    >
+                                        <StarIcon size={17} filled />
+                                    </button>
+
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{item.item_display}</p>
+                                        <p className="mt-1 flex items-center gap-1.5 text-xs text-fg-3 min-w-0">
+                                            <span className={`label shrink-0 px-1.5 py-0.5 rounded ${MEAL_CHIP[item.meal] ?? 'bg-surface-2 text-fg-2'}`}>
+                                                {item.meal}
+                                            </span>
+                                            <span className="truncate">
+                                                {item.hall}{item.station ? ` · ${item.station}` : ''}
+                                            </span>
+                                        </p>
+                                    </div>
+
+                                    {item.nutrition?.calories != null && (
+                                        <span className="text-[0.8125rem] font-semibold text-fg-2 tnum whitespace-nowrap shrink-0">
+                                            {item.nutrition.calories}
+                                            <span className="text-fg-3 font-medium text-[0.6875rem] ml-0.5">kcal</span>
+                                        </span>
+                                    )}
+
+                                    <button
+                                        onClick={() => addToCalendar(item)}
+                                        className="text-fg-3 hover:text-navy-ink transition-colors shrink-0 p-1 rounded-md hover:bg-surface-3"
+                                        aria-label={`Add ${item.item_display} to Google Calendar`}
+                                        title="Add to Google Calendar"
+                                    >
+                                        <CalendarIcon size={16} />
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </section>
             ))}
 
             {notServed.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50 p-5">
-                    <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
-                        Not on any upcoming menu
-                    </h3>
-                    <ul className="flex flex-wrap gap-2">
+                <section className={`${PANEL} p-4`}>
+                    <h3 className="label text-fg-2 mb-3">Starred, but not on any upcoming menu</h3>
+                    <ul className="flex flex-wrap gap-1.5">
                         {notServed.map(({ key, name }) => (
-                            <li key={key} className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 dark:bg-slate-700 text-sm text-gray-600 dark:text-gray-300">
+                            <li
+                                key={key}
+                                className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border border-line bg-surface-2 text-xs font-medium text-fg-2"
+                            >
                                 {name}
                                 <button
                                     onClick={() => toggleFavorite(key)}
-                                    className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors leading-none"
-                                    title="Remove from favorites"
+                                    className="text-fg-3 hover:text-danger transition-colors"
+                                    aria-label={`Unstar ${name}`}
+                                    title="Unstar"
                                 >
-                                    ×
+                                    <CloseIcon size={13} />
                                 </button>
                             </li>
                         ))}
                     </ul>
-                </div>
+                </section>
             )}
         </div>
     );

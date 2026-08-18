@@ -15,7 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Redesigned the interface: a cool light-gray page with white panels, real borders and shadows, and Michigan navy carrying every primary action. Maize is now reserved for one job: active state, starred items, and today.
+- **Stations are visually separated.** Each station inside a hall gets its own banded header with an item count and hard rules above and below it, so Grill, Deli and Bakery read as distinct blocks rather than one undifferentiated list.
+- Set the site in Manrope, self-hosted and subset (25 KB latin, no external font requests). Previously the site had no typeface at all and fell back to whatever the OS shipped.
+- Replaced every emoji used as an icon with a drawn SVG set on a single 24 grid and 1.5px stroke.
+- Cut the row colour system down: meal is the one dimension that gets colour (four chips), dietary tags get the single semantic green, and nutrition marks are neutral. Rows show at most three marks so the item name stays the thing you scan.
+- Moved the view tabs into the sticky app bar so they stay reachable while scrolling, and dropped the duplicated page title. My Menu and Plate get their own heading instead of repeating the hero.
+- The hero headline changes with the Detroit clock, naming the meal that is on right now, or saying the kitchens are closed and tomorrow is already listed.
+- Item names no longer truncate to a few characters on phones; calorie and control columns give up their fixed widths below 640px so the name gets the room.
+- Fixed text and icon colours that fell below WCAG AA/AA-nontext, including the footer, the metadata under each item, and the resting (unstarred) star.
 - The site now lives at https://umichfoodfinder.berezone.com. Docs, the extension's ingest-URL placeholder, and the Supabase sign-in redirect all point at the new domain; existing extension installs need their ingest URL updated in the popup.
+
+### Removed
+
+- Deleted the leftover Vite starter files (`App.css` with its spinning-logo keyframes, `react.svg`, `vite.svg`) and replaced the placeholder `<title>client</title>` with a real title, description, and theme-colour meta.
 
 ### Security
 

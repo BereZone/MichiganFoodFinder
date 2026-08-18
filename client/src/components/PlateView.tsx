@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import type { Plate } from '../types';
 import { describeServing, isIncomplete, roundGrams, totalPlate } from '../lib/nutrition';
 import { clampServings, entryId, MIN_SERVINGS, SERVING_STEP } from '../lib/plateOps';
+import { MinusIcon, PlusIcon, CloseIcon, TrayIcon, AlertIcon, ChevronDownIcon } from './Icon';
 
 interface Props {
     plate: Plate;
@@ -23,76 +24,108 @@ function formatShortDate(dateStr: string): string {
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-const CARD = 'bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/50';
+const PANEL = 'bg-surface border border-line rounded-xl shadow-panel';
+
+const FIELD =
+    'w-full bg-surface border border-line rounded-lg px-3 py-2 text-sm text-fg appearance-none pr-9 ' +
+    'cursor-pointer focus:border-navy-ink focus:ring-2 focus:ring-navy-ink/20 focus:outline-none transition-colors';
+
+const NOTE = 'flex items-start gap-2.5 px-4 py-3 text-sm rounded-xl border';
 
 const PlateView: React.FC<Props> = ({
     plate, date, meal, availableDates, meals, onSelect,
     setServings, removeItem, clearPlate, syncError, signedIn, authEnabled,
 }) => {
     const totals = useMemo(() => totalPlate(plate.items), [plate.items]);
+    const showSignInNote = authEnabled && !signedIn;
 
-    const stats: Array<[string, string]> = [
-        ['Calories', String(Math.round(totals.calories))],
-        ['Protein', `${roundGrams(totals.protein_g)} g`],
-        ['Carbs', `${roundGrams(totals.carbs_g)} g`],
-        ['Fat', `${roundGrams(totals.fat_g)} g`],
-        ['Sodium', `${Math.round(totals.sodium_mg)} mg`],
+    const stats: Array<[string, string, string]> = [
+        ['Calories', String(Math.round(totals.calories)), ''],
+        ['Protein', String(roundGrams(totals.protein_g)), 'g'],
+        ['Carbs', String(roundGrams(totals.carbs_g)), 'g'],
+        ['Fat', String(roundGrams(totals.fat_g)), 'g'],
+        ['Sodium', String(Math.round(totals.sodium_mg)), 'mg'],
     ];
 
     return (
         <div className="space-y-4">
-            {/* ── Plate selector ── */}
-            <div className={`${CARD} p-4 flex flex-col sm:flex-row gap-3`}>
-                <select
-                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-[#FFCB05]/60 outline-none bg-gray-50 dark:bg-slate-700 dark:text-white"
-                    value={date}
-                    onChange={e => onSelect(e.target.value, meal)}
-                >
-                    {availableDates.map(d => (
-                        <option key={d} value={d}>{formatShortDate(d)}</option>
-                    ))}
-                </select>
-                <select
-                    className="sm:w-40 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-[#FFCB05]/60 outline-none bg-gray-50 dark:bg-slate-700 dark:text-white"
-                    value={meal}
-                    onChange={e => onSelect(date, e.target.value)}
-                >
-                    {meals.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+            {/* ── Which plate ── */}
+            <div className={`${PANEL} p-4 flex flex-col sm:flex-row gap-3`}>
+                <div className="flex-1">
+                    <label htmlFor="plate-date" className="label text-fg-2 block mb-1.5">Day</label>
+                    <div className="relative">
+                        <select
+                            id="plate-date"
+                            className={FIELD}
+                            value={date}
+                            onChange={e => onSelect(e.target.value, meal)}
+                        >
+                            {availableDates.map(d => (
+                                <option key={d} value={d}>{formatShortDate(d)}</option>
+                            ))}
+                        </select>
+                        <ChevronDownIcon
+                            size={15}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-3 pointer-events-none"
+                        />
+                    </div>
+                </div>
+                <div className="sm:w-44">
+                    <label htmlFor="plate-meal" className="label text-fg-2 block mb-1.5">Meal</label>
+                    <div className="relative">
+                        <select
+                            id="plate-meal"
+                            className={FIELD}
+                            value={meal}
+                            onChange={e => onSelect(date, e.target.value)}
+                        >
+                            {meals.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <ChevronDownIcon
+                            size={15}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-3 pointer-events-none"
+                        />
+                    </div>
+                </div>
             </div>
 
-            {authEnabled && !signedIn && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-4 py-3 text-sm text-blue-700 dark:text-blue-300 text-center">
-                    Plates are saved on this device only — sign in to sync across devices.
+            {showSignInNote && (
+                <div className={`${NOTE} border-line bg-navy-wash text-fg-2`}>
+                    <AlertIcon size={16} className="shrink-0 mt-px text-navy-ink" />
+                    <span>Plates live in this browser only. Sign in and they follow you to your phone.</span>
                 </div>
             )}
 
             {syncError && (
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3 text-sm text-amber-700 dark:text-amber-300 text-center">
-                    Not saved to your account — changes are on this device.
+                <div className={`${NOTE} border-warn/40 bg-warn-wash text-warn`}>
+                    <AlertIcon size={16} className="shrink-0 mt-px" />
+                    <span>Could not reach your account. These changes are saved on this device only.</span>
                 </div>
             )}
 
             {plate.items.length === 0 ? (
-                <div className={`${CARD} p-16 text-center`}>
-                    <p className="text-4xl mb-4">🍽️</p>
-                    <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">Nothing on this plate</p>
-                    <p className="text-sm text-gray-400 dark:text-gray-500">
-                        Tap + on items in Browse to add them and see your totals here.
+                <div className={`${PANEL} px-6 py-16 text-center`}>
+                    <TrayIcon size={40} className="mx-auto text-fg-3" />
+                    <p className="mt-4 text-lg font-extrabold">Nothing on this plate</p>
+                    <p className="mt-1.5 text-sm text-fg-3 max-w-[38ch] mx-auto leading-relaxed">
+                        Hit
+                        <span className="inline-grid place-items-center w-4 h-4 mx-1 align-[-3px] border border-line-2 rounded">
+                            <PlusIcon size={10} />
+                        </span>
+                        beside anything while browsing. Calories and macros add themselves up here.
                     </p>
                 </div>
             ) : (
                 <>
-                    {/* ── Totals ── */}
-                    <div className={`${CARD} sticky top-14 z-30 px-4 py-3`}>
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                            {stats.map(([label, value]) => (
-                                <div key={label} className="text-center">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                                        {label}
-                                    </p>
-                                    <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums">
+                    {/* ── Running total ── */}
+                    <div className={`${PANEL} sticky top-[3.75rem] z-30 p-4`}>
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-y-4 gap-x-3">
+                            {stats.map(([label, value, unit]) => (
+                                <div key={label}>
+                                    <p className="label text-fg-3">{label}</p>
+                                    <p className="mt-1.5 text-2xl font-extrabold tracking-tight tnum leading-none">
                                         {value}
+                                        {unit && <span className="text-sm font-bold text-fg-3 ml-0.5">{unit}</span>}
                                     </p>
                                 </div>
                             ))}
@@ -100,41 +133,44 @@ const PlateView: React.FC<Props> = ({
                     </div>
 
                     {totals.incompleteCount > 0 && (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3 text-sm text-amber-700 dark:text-amber-300 text-center">
-                            {totals.incompleteCount} item{totals.incompleteCount !== 1 ? 's are' : ' is'} missing
-                            some nutrition data — totals are a lower bound.
+                        <div className={`${NOTE} border-warn/40 bg-warn-wash text-warn`}>
+                            <AlertIcon size={16} className="shrink-0 mt-px" />
+                            <span>
+                                {totals.incompleteCount} item{totals.incompleteCount !== 1 ? 's are' : ' is'} missing
+                                some nutrition data, so these totals are a floor, not the whole story.
+                            </span>
                         </div>
                     )}
 
-                    {/* ── Items ── */}
-                    <div className={`${CARD} overflow-hidden`}>
-                        <ul className="divide-y divide-gray-100 dark:divide-slate-700/50">
+                    {/* ── What is on it ── */}
+                    <div className={`${PANEL} overflow-hidden`}>
+                        <ul className="divide-y divide-line">
                             {plate.items.map(item => {
                                 const id = entryId(item);
                                 const cals = item.nutrition.calories;
                                 const serving = describeServing(item.serving_size, item.servings);
+                                const step =
+                                    'w-8 h-8 grid place-items-center rounded-lg border border-line-2 text-fg-2 ' +
+                                    'hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed ' +
+                                    'disabled:hover:bg-surface transition-colors shrink-0';
+
                                 return (
-                                    <li key={id} className="px-4 py-3 flex items-center gap-3">
+                                    <li key={id} className="flex items-center gap-3 px-4 py-3">
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-gray-900 dark:text-white text-sm truncate">
-                                                {item.name}
-                                            </p>
-                                            <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                                            <p className="text-sm font-medium truncate">{item.name}</p>
+                                            <p className="text-xs text-fg-3 truncate mt-0.5">
                                                 {item.hall}{item.station ? ` · ${item.station}` : ''}
                                                 {isIncomplete(item) && (
-                                                    <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                                                        partial data
-                                                    </span>
+                                                    <span className="ml-2 font-semibold text-warn">partial data</span>
                                                 )}
                                             </p>
                                             {serving && (
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                                                    <span className="text-gray-400 dark:text-gray-500">Serving:</span>{' '}
+                                                <p className="text-xs text-fg-3 truncate mt-0.5">
                                                     {serving.label}
                                                     {serving.scaled && (
                                                         <>
-                                                            {' '}<span className="text-gray-300 dark:text-slate-600">→</span>{' '}
-                                                            <span className="font-semibold text-gray-700 dark:text-gray-200 tabular-nums">
+                                                            {' → '}
+                                                            <span className="font-semibold text-fg-2 tnum">
                                                                 {serving.scaled}
                                                             </span>
                                                         </>
@@ -143,15 +179,15 @@ const PlateView: React.FC<Props> = ({
                                             )}
                                         </div>
 
-                                        {/* Servings stepper */}
                                         <div className="flex items-center gap-1 shrink-0">
                                             <button
                                                 onClick={() => setServings(id, item.servings - SERVING_STEP)}
                                                 disabled={item.servings <= MIN_SERVINGS}
-                                                className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors leading-none"
+                                                className={step}
+                                                aria-label={`One fewer serving of ${item.name}`}
                                                 title="Fewer servings"
                                             >
-                                                −
+                                                <MinusIcon size={15} />
                                             </button>
                                             <input
                                                 type="number"
@@ -164,28 +200,35 @@ const PlateView: React.FC<Props> = ({
                                                     if (e.target.value === '' || Number.isNaN(n)) return;
                                                     setServings(id, clampServings(n));
                                                 }}
-                                                className="w-14 px-1 py-1 text-sm text-center tabular-nums border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-[#FFCB05]/60"
+                                                className="w-14 px-1 py-1.5 text-sm font-semibold text-center tnum bg-surface border border-line rounded-lg text-fg focus:border-navy-ink focus:ring-2 focus:ring-navy-ink/20 focus:outline-none transition-colors"
                                                 aria-label={`Servings of ${item.name}`}
                                             />
                                             <button
                                                 onClick={() => setServings(id, item.servings + SERVING_STEP)}
-                                                className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors leading-none"
+                                                className={step}
+                                                aria-label={`One more serving of ${item.name}`}
                                                 title="More servings"
                                             >
-                                                +
+                                                <PlusIcon size={15} />
                                             </button>
                                         </div>
 
-                                        <span className="w-20 text-right text-xs text-gray-400 dark:text-gray-500 tabular-nums shrink-0">
-                                            {cals != null ? `${Math.round(cals * item.servings)} kcal` : '—'}
+                                        <span className="w-[4.5rem] text-right text-[0.8125rem] font-semibold text-fg-2 tnum shrink-0">
+                                            {cals != null ? (
+                                                <>
+                                                    {Math.round(cals * item.servings)}
+                                                    <span className="text-fg-3 font-medium text-[0.6875rem] ml-0.5">kcal</span>
+                                                </>
+                                            ) : '—'}
                                         </span>
 
                                         <button
                                             onClick={() => removeItem(id)}
-                                            className="text-gray-300 dark:text-slate-700 hover:text-red-500 dark:hover:text-red-400 transition-colors text-lg shrink-0 leading-none"
+                                            className="text-fg-3 hover:text-danger transition-colors shrink-0 p-1 rounded-md hover:bg-surface-3"
+                                            aria-label={`Remove ${item.name} from the plate`}
                                             title="Remove from plate"
                                         >
-                                            ×
+                                            <CloseIcon size={16} />
                                         </button>
                                     </li>
                                 );
@@ -193,12 +236,12 @@ const PlateView: React.FC<Props> = ({
                         </ul>
                     </div>
 
-                    <div className="text-center">
+                    <div>
                         <button
                             onClick={clearPlate}
-                            className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 underline transition-colors"
+                            className="text-xs font-semibold text-fg-2 hover:text-danger transition-colors"
                         >
-                            Clear plate
+                            Clear this plate
                         </button>
                     </div>
                 </>

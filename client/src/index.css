@@ -1,5 +1,156 @@
 @import "tailwindcss";
+@import '@fontsource-variable/manrope/wght.css';
+
 @variant dark (&:where(.dark, .dark *));
+
+/* ─────────────────────────────────────────────────────────────
+   Michigan Food Finder surface system
+
+   Cool and bright, not warm. The page ground is a cool gray,
+   content sits on white panels with a real border and a real
+   shadow, and Michigan navy carries every primary action.
+
+   Colour discipline: one accent (navy), one highlight (maize),
+   three semantic hues (warn / danger / good), and four categorical
+   meal hues used ONLY on the meal chip. Dietary tags and nutrition
+   marks are neutral. They were the rainbow before.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+    --c-bg:          #f4f6f9;
+    --c-surface:     #ffffff;
+    --c-surface-2:   #f1f5f9;
+    --c-surface-3:   #e6ebf2;
+
+    --c-border:      #e3e8ef;
+    --c-border-2:    #cbd4e0;
+
+    --c-text:        #0f172a;
+    --c-text-2:      #45566b;
+    --c-text-3:      #5b6b7f;
+    --c-icon-idle:   #8593a5;
+
+    --c-navy:        #00274c;
+    --c-navy-2:      #003a70;
+    --c-on-navy:     #ffffff;
+    --c-navy-ink:    #00417d;
+    --c-navy-wash:   #eaf1f9;
+
+    --c-maize:       #ffcb05;
+    --c-maize-ink:   #8a6a00;
+    --c-maize-wash:  #fff6da;
+
+    --c-warn:        #92580b;
+    --c-warn-wash:   #fdf4e3;
+    --c-danger:      #b42318;
+    --c-danger-wash: #fef3f2;
+    --c-good:        #256d43;
+
+    --c-meal-breakfast:      #92580b;
+    --c-meal-breakfast-wash: #fbf1da;
+    --c-meal-brunch:         #a8410f;
+    --c-meal-brunch-wash:    #fbeae0;
+    --c-meal-lunch:          #256d43;
+    --c-meal-lunch-wash:     #e3f1e8;
+    --c-meal-dinner:         #2f4c8a;
+    --c-meal-dinner-wash:    #e7edf9;
+
+    --sh-panel: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px -4px rgba(15, 23, 42, 0.09);
+    --sh-lift:  0 2px 4px rgba(15, 23, 42, 0.06), 0 12px 26px -8px rgba(15, 23, 42, 0.16);
+    --sh-pop:   0 8px 28px -6px rgba(15, 23, 42, 0.28);
+}
+
+.dark {
+    --c-bg:          #0b1220;
+    --c-surface:     #141d2e;
+    --c-surface-2:   #1b2538;
+    --c-surface-3:   #243046;
+
+    --c-border:      #263349;
+    --c-border-2:    #38485f;
+
+    --c-text:        #e9eef6;
+    --c-text-2:      #adbacd;
+    --c-text-3:      #8c9bb1;
+    --c-icon-idle:   #6b7c92;
+
+    /* The fill lifts to a blue that still holds white text; navy-ink
+       is the separate token for navy used AS text on the dark ground. */
+    --c-navy:        #1d55a0;
+    --c-navy-2:      #2a68bd;
+    --c-on-navy:     #ffffff;
+    --c-navy-ink:    #8fb8e8;
+    --c-navy-wash:   #16243c;
+
+    --c-maize:       #ffcb05;
+    --c-maize-ink:   #ffd84d;
+    --c-maize-wash:  #2a2410;
+
+    --c-warn:        #f0c265;
+    --c-warn-wash:   #241f10;
+    --c-danger:      #f8a397;
+    --c-danger-wash: #2b1512;
+    --c-good:        #7fc99b;
+
+    --c-meal-breakfast:      #f2c265;
+    --c-meal-breakfast-wash: #2b2312;
+    --c-meal-brunch:         #f3a97f;
+    --c-meal-brunch-wash:    #2e1d13;
+    --c-meal-lunch:          #7fc99b;
+    --c-meal-lunch-wash:     #12291d;
+    --c-meal-dinner:         #9db8ea;
+    --c-meal-dinner-wash:    #18213a;
+
+    --sh-panel: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+    --sh-lift:  0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 26px -8px rgba(0, 0, 0, 0.6);
+    --sh-pop:   0 8px 28px -6px rgba(0, 0, 0, 0.7);
+}
+
+@theme inline {
+    --font-sans: 'Manrope Variable', system-ui, -apple-system, sans-serif;
+
+    --color-bg:        var(--c-bg);
+    --color-surface:   var(--c-surface);
+    --color-surface-2: var(--c-surface-2);
+    --color-surface-3: var(--c-surface-3);
+
+    --color-line:   var(--c-border);
+    --color-line-2: var(--c-border-2);
+
+    --color-fg:   var(--c-text);
+    --color-fg-2: var(--c-text-2);
+    --color-fg-3: var(--c-text-3);
+    --color-icon-idle: var(--c-icon-idle);
+
+    --color-navy:      var(--c-navy);
+    --color-navy-2:    var(--c-navy-2);
+    --color-on-navy:   var(--c-on-navy);
+    --color-navy-ink:  var(--c-navy-ink);
+    --color-navy-wash: var(--c-navy-wash);
+
+    --color-maize:      var(--c-maize);
+    --color-maize-ink:  var(--c-maize-ink);
+    --color-maize-wash: var(--c-maize-wash);
+
+    --color-warn:        var(--c-warn);
+    --color-warn-wash:   var(--c-warn-wash);
+    --color-danger:      var(--c-danger);
+    --color-danger-wash: var(--c-danger-wash);
+    --color-good:        var(--c-good);
+
+    --color-meal-breakfast:      var(--c-meal-breakfast);
+    --color-meal-breakfast-wash: var(--c-meal-breakfast-wash);
+    --color-meal-brunch:         var(--c-meal-brunch);
+    --color-meal-brunch-wash:    var(--c-meal-brunch-wash);
+    --color-meal-lunch:          var(--c-meal-lunch);
+    --color-meal-lunch-wash:     var(--c-meal-lunch-wash);
+    --color-meal-dinner:         var(--c-meal-dinner);
+    --color-meal-dinner-wash:    var(--c-meal-dinner-wash);
+
+    --shadow-panel: var(--sh-panel);
+    --shadow-lift:  var(--sh-lift);
+    --shadow-pop:   var(--sh-pop);
+}
 
 *, *::before, *::after {
     box-sizing: border-box;
@@ -7,6 +158,7 @@
 
 html {
     scroll-behavior: smooth;
+    background-color: var(--c-bg);
 }
 
 body {
@@ -14,16 +166,72 @@ body {
     padding: 0;
     min-height: 100vh;
     overflow-x: hidden;
+    background-color: var(--c-bg);
+    color: var(--c-text);
+    font-family: 'Manrope Variable', system-ui, -apple-system, sans-serif;
+    font-synthesis-weight: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #f9fafb;
-    transition: background-color 0.2s ease;
-}
-
-.dark body {
-    background-color: #020617;
 }
 
 #root {
     min-height: 100vh;
+}
+
+::selection {
+    background-color: var(--c-maize);
+    color: #0f172a;
+}
+
+:focus-visible {
+    outline: 2px solid var(--c-navy-ink);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Calories, servings, macros: a column of numbers, not prose. */
+.tnum {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Station names and field labels. */
+.label {
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 700;
+    font-size: 0.6875rem;
+    line-height: 1.2;
+}
+
+/* ── The one authored moment ──────────────────────────────────
+   Results settle in when the board is deliberately reset, meaning
+   first load and "what's on right now", staggered by day. Never on
+   scroll, never on every keystroke. */
+@keyframes settle {
+    from { opacity: 0; transform: translateY(10px) scale(0.995); }
+    to   { opacity: 1; transform: none; }
+}
+
+.settle {
+    animation: settle 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@keyframes star-pop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.35); }
+    100% { transform: scale(1); }
+}
+
+.star-pop {
+    animation: star-pop 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .settle, .star-pop { animation: none; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
