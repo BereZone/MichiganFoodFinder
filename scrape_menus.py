@@ -39,6 +39,7 @@ DINING_HALLS = {
     "North Quad": "https://dining.umich.edu/menus-locations/dining-halls/north-quad/",
     "Twigs at Oxford": "https://dining.umich.edu/menus-locations/dining-halls/twigs-at-oxford/",
     "South Quad": "https://dining.umich.edu/menus-locations/dining-halls/south-quad/",
+    "Wolverine Village": "https://dining.umich.edu/menus-locations/dining-halls/wolverine-village-dining-hall/",
 }
 
 HEADERS = {

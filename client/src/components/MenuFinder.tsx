@@ -17,7 +17,7 @@ import {
 
 const DINING_HALLS = [
     'Bursley', 'East Quad', 'Markley', 'Mosher-Jordan',
-    'North Quad', 'Twigs at Oxford', 'South Quad',
+    'North Quad', 'Twigs at Oxford', 'South Quad', 'Wolverine Village',
 ];
 
 const MEALS = ['Breakfast', 'Brunch', 'Lunch', 'Dinner'];
@@ -434,8 +434,8 @@ const MenuFinder: React.FC = () => {
                             </h1>
                             <p className="mt-1.5 text-sm text-fg-3">
                                 {dateRange
-                                    ? `Seven halls · ${formatShortDate(dateRange.start)} – ${formatShortDate(dateRange.end)}`
-                                    : 'Seven halls across campus'}
+                                    ? `${DINING_HALLS.length} halls · ${formatShortDate(dateRange.start)} – ${formatShortDate(dateRange.end)}`
+                                    : `${DINING_HALLS.length} halls across campus`}
                                 {lastUpdated && ` · ${freshness(lastUpdated)}`}
                             </p>
 
